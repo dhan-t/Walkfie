@@ -5,10 +5,14 @@ import android.content.pm.PackageManager;
 import android.location.Location;
 import android.os.Bundle;
 import android.os.Handler;
+import android.util.DisplayMetrics;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -16,6 +20,8 @@ import androidx.annotation.Nullable;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
 
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationCallback;
@@ -30,15 +36,19 @@ import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
-import com.google.android.material.bottomsheet.BottomSheetDialog;
+import com.google.android.material.bottomsheet.BottomSheetBehavior;
 
-public class RecordFragment extends Fragment implements OnMapReadyCallback {
+import java.util.ArrayList;
+import java.util.List;
+
+public class RecordFragment extends Fragment implements OnMapReadyCallback, ActivityAdapter.OnActivityClickListener {
 
     private MapView mapView;
     private GoogleMap gMap;
 
     private View recordingOverlay;
     private Button btnStartStop;
+    private View bottomNavigationView;
 
     private static final String MAPVIEW_BUNDLE_KEY = "MapViewBundleKey";
     private static final int LOCATION_PERMISSION_CODE = 1002;
@@ -54,6 +64,14 @@ public class RecordFragment extends Fragment implements OnMapReadyCallback {
     private boolean isRecording = false;
     private String currentActivityType = "";
     private Location lastKnownLocation;
+    private LinearLayout bottomSheet;
+    private BottomSheetBehavior<LinearLayout> bottomSheetBehavior;
+    private RecyclerView recyclerViewActivities;
+    private ActivityAdapter activityAdapter;
+    private ImageView ivIcon1;
+    private ImageView ivIcon2;
+    private TextView tvDialogTitle;
+    private LinearLayout activityIconsLayout;
 
     public RecordFragment() {
         // Required empty public constructor
@@ -69,6 +87,25 @@ public class RecordFragment extends Fragment implements OnMapReadyCallback {
         mapView = view.findViewById(R.id.mapViewRecord);
         recordingOverlay = view.findViewById(R.id.recordingOverlay);
         btnStartStop = view.findViewById(R.id.btnStartStop);
+
+        // Customize the dialog's window to position it at the top
+        View sheetView = requireActivity().findViewById(R.id.bottom_sheet);
+
+        // Get references to your buttons inside the dialog layout
+        ivIcon1 = sheetView.findViewById(R.id.ivIcon1);
+        ivIcon2 = sheetView.findViewById(R.id.ivIcon2);
+        tvDialogTitle = sheetView.findViewById(R.id.tvDialogTitle);
+
+        // Set click listeners
+        ivIcon1.setOnClickListener(v -> {
+            bottomSheetBehavior.setState(BottomSheetBehavior.STATE_HIDDEN);
+            startRecording("Run");
+        });
+
+        ivIcon2.setOnClickListener(v -> {
+            bottomSheetBehavior.setState(BottomSheetBehavior.STATE_HIDDEN);
+            startRecording("Ride");
+        });
 
         Bundle mapViewBundle = null;
         if (savedInstanceState != null) {
@@ -87,36 +124,100 @@ public class RecordFragment extends Fragment implements OnMapReadyCallback {
             }
         });
 
+        // get BottomNavigationView from the parent activity
+        bottomNavigationView = requireActivity().findViewById(R.id.bottomNavigation);
+
+        // Get the layout from the activity
+        bottomSheet = requireActivity().findViewById(R.id.bottom_sheet);
+
+        // Get the behavior
+        bottomSheetBehavior = BottomSheetBehavior.from(bottomSheet);
+
+        // Customize the behavior
+        bottomSheetBehavior.setPeekHeight(bottomNavigationView.getHeight());
+        bottomSheetBehavior.setState(BottomSheetBehavior.STATE_HIDDEN);
+        bottomSheetBehavior.addBottomSheetCallback(new BottomSheetBehavior.BottomSheetCallback() {
+            @Override
+            public void onStateChanged(@NonNull View bottomSheet, int newState) {
+                // React to state change
+                if (newState == BottomSheetBehavior.STATE_HIDDEN) {
+
+                }
+            }
+
+            @Override
+            public void onSlide(@NonNull View bottomSheet, float slideOffset) {
+                // React to dragging events
+                if (slideOffset > 0) {
+                    bottomSheetBehavior.setPeekHeight(bottomNavigationView.getHeight(), true);
+                    mapView.setClickable(false);
+                    mapView.setFocusable(false);
+                } else {
+                    bottomSheetBehavior.setPeekHeight(bottomSheet.getHeight(), true);
+                    mapView.setClickable(true);
+                    mapView.setFocusable(true);
+                }
+            }
+        });
+
         return view;
     }
-
 
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
-        // Call this to show the controls right away
+        // Get the layout from the activity
+        bottomSheet = requireActivity().findViewById(R.id.bottom_sheet);
+
+        // Get the behavior
+        bottomSheetBehavior = BottomSheetBehavior.from(bottomSheet);
+
+        // Customize the behavior
+        bottomSheetBehavior.setPeekHeight(bottomNavigationView.getHeight());
+        bottomSheetBehavior.setState(BottomSheetBehavior.STATE_HIDDEN);
+
+        bottomSheetBehavior.addBottomSheetCallback(new BottomSheetBehavior.BottomSheetCallback() {
+            @Override
+            public void onStateChanged(@NonNull View bottomSheet, int newState) {
+                // React to state change
+                if (newState == BottomSheetBehavior.STATE_HIDDEN) {
+
+                }
+            }
+
+            @Override
+            public void onSlide(@NonNull View bottomSheet, float slideOffset) {
+                // React to dragging events
+                if (slideOffset > 0) {
+                    bottomSheetBehavior.setPeekHeight(bottomNavigationView.getHeight(), true);
+                    mapView.setClickable(false);
+                    mapView.setFocusable(false);
+                } else {
+                    bottomSheetBehavior.setPeekHeight(BottomSheetBehavior.PEEK_HEIGHT_AUTO, true);
+                    mapView.setClickable(true);
+                    mapView.setFocusable(true);
+                }
+            }
+        });
+
+        // Get the width of the parent
+        DisplayMetrics displayMetrics = new DisplayMetrics();
+        requireActivity().getWindowManager().getDefaultDisplay().getMetrics(displayMetrics);
+        int screenWidth = displayMetrics.widthPixels;
+        // Set the width of the bottom sheet
+        ViewGroup.LayoutParams layoutParams = bottomSheet.getLayoutParams();
+        layoutParams.width = screenWidth;
+        bottomSheet.setLayoutParams(layoutParams);
+        // Set the bottom sheet's state to be hidden by default
+        bottomSheetBehavior.setState(BottomSheetBehavior.STATE_HIDDEN);
     }
 
     private void showActivityChooserDialog() {
-        BottomSheetDialog dialog = new BottomSheetDialog(requireContext());
-        View sheetView = getLayoutInflater().inflate(R.layout.dialog_activity_chooser, null);
-        dialog.setContentView(sheetView);
+        bottomSheetBehavior.setPeekHeight(bottomSheet.getHeight(), true);
 
-        Button btnRun = sheetView.findViewById(R.id.btnRun);
-        Button btnRide = sheetView.findViewById(R.id.btnRide);
-
-        btnRun.setOnClickListener(v -> {
-            dialog.dismiss();
-            startRecording("Run");
-        });
-
-        btnRide.setOnClickListener(v -> {
-            dialog.dismiss();
-            startRecording("Ride");
-        });
-
-        dialog.show();
+        // Set the state to collapsed
+        bottomSheetBehavior.setState(BottomSheetBehavior.STATE_COLLAPSED);
     }
 
     private void centerMapOnUser(Location location) {
@@ -130,7 +231,7 @@ public class RecordFragment extends Fragment implements OnMapReadyCallback {
     private void startRecording(String activityType) {
         recordingOverlay.setVisibility(View.VISIBLE);
         btnStartStop.setText("Stop");
-        isRecording = true; // <-- add this!
+        isRecording = true;
         currentActivityType = activityType;
         Toast.makeText(requireContext(), activityType + " recording started", Toast.LENGTH_SHORT).show();
     }
@@ -142,7 +243,11 @@ public class RecordFragment extends Fragment implements OnMapReadyCallback {
         Toast.makeText(requireContext(), "Recording stopped", Toast.LENGTH_SHORT).show();
     }
 
-
+    @Override
+    public void onActivityClick(ActivityItem activity) {
+        bottomSheetBehavior.setState(BottomSheetBehavior.STATE_HIDDEN);
+        startRecording(activity.getName());
+    }
 
     public void showRecordControls() {
         if(recordingOverlay != null && btnStartStop != null){

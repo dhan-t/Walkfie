@@ -5,13 +5,14 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.animation.Animation;
 import android.view.animation.AnimationUtils;
+import android.widget.LinearLayout;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentManager;
 
 import com.google.android.material.bottomnavigation.BottomNavigationView;
-import com.google.android.material.floatingactionbutton.FloatingActionButton;
+import com.google.android.material.bottomsheet.BottomSheetBehavior;
 
 public class HomeActivity extends AppCompatActivity {
 
@@ -24,6 +25,8 @@ public class HomeActivity extends AppCompatActivity {
     private Fragment recordFragment;
     private Fragment mapFragment;
     private Fragment messageFragment;
+    private LinearLayout bottomSheet;
+    private BottomSheetBehavior<LinearLayout> bottomSheetBehavior;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -35,6 +38,13 @@ public class HomeActivity extends AppCompatActivity {
 
         // Initialize FragmentManager
         fragmentManager = getSupportFragmentManager();
+
+        bottomSheet = findViewById(R.id.bottom_sheet);
+        bottomSheetBehavior = BottomSheetBehavior.from(bottomSheet);
+        bottomSheetBehavior.setState(BottomSheetBehavior.STATE_HIDDEN);
+        bottomSheet.setVisibility(View.GONE);
+
+        getSupportFragmentManager().addOnBackStackChangedListener(this::onBackStackChanged);
 
         // Set HomeFragment as the initial fragment
         currentFragment = new HomeFragment();
@@ -81,13 +91,25 @@ public class HomeActivity extends AppCompatActivity {
                         .show(selectedFragment)
                         .commit();
                 currentFragment = selectedFragment;
-
+                // Only trigger for the RecordFragment
                 if (selectedFragment == recordFragment) {
-                    ((RecordFragment) recordFragment).showRecordControls();
+                    bottomSheet.setVisibility(View.VISIBLE);
+
+                } else {
+                    bottomSheet.setVisibility(View.GONE);
                 }
             }
             return true;
         });
+    }
+
+    private void onBackStackChanged() {
+        Fragment currentFragment = getSupportFragmentManager().findFragmentById(R.id.fragment_container);
+        if (currentFragment instanceof RecordFragment) {
+            bottomSheet.setVisibility(View.VISIBLE);
+        } else {
+            bottomSheet.setVisibility(View.GONE);
+        }
     }
 
     private void animateNavIconsStaggered() {

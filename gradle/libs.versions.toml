@@ -19,9 +19,10 @@ mapsSecret = "2.0.1"
 googleMaps = "19.2.0"
 firebaseDatabaseKtx = "21.0.0"
 gms-auth = "21.3.0"
-facebook = "18.0.2"
+facebook = "18.0.3"
 coreKtx = "1.16.0"
 kotlin = "1.9.22"
+cardview = "1.0.0"
 
 [libraries]
 core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -49,6 +50,7 @@ json = { module = "org.json:json", version = "20230618" }
 gms-auth = { group = "com.google.android.gms", name = "play-services-auth", version.ref = "gms-auth" }
 facebook-android-sdk = { group = "com.facebook.android", name = "facebook-android-sdk", version.ref = "facebook" }
 play-services-location = { module = "com.google.android.gms:play-services-location", version = "21.3.0" }
+cardview = { group = "androidx.cardview", name = "cardview", version.ref = "cardview" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

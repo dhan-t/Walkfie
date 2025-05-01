@@ -55,6 +55,7 @@ dependencies {
     implementation(libs.activity)
     implementation(libs.constraintlayout)
     implementation(libs.glide)
+    implementation(libs.cardview)
     implementation(libs.firebase.database)
     implementation(libs.firebase.auth)
     implementation(libs.credentials)

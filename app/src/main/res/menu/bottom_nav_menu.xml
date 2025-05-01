@@ -1,22 +1,22 @@
 <menu xmlns:android="http://schemas.android.com/apk/res/android">
     <item
         android:id="@+id/nav_home"
-        android:icon="@drawable/home"
+        android:icon="@drawable/ic_home"
         android:title="Home"/>
     <item
         android:id="@+id/nav_photo"
-        android:icon="@drawable/photo"
+        android:icon="@drawable/ic_photo"
         android:title="Photo"/>
     <item
         android:id="@+id/nav_record"
-        android:icon="@drawable/record"
+        android:icon="@drawable/ic_record"
         android:title="Record"/>
     <item
         android:id="@+id/nav_map"
-        android:icon="@drawable/map"
+        android:icon="@drawable/ic_map"
         android:title="Map"/>
     <item
         android:id="@+id/nav_message"
-        android:icon="@drawable/message"
+        android:icon="@drawable/ic_message"
         android:title="Message"/>
 </menu>

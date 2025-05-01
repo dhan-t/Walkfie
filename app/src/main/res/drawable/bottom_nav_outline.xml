@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="@android:color/white" /> <!-- Background of the bottom nav bar -->
+            <stroke
+                android:width="1dp"
+                android:color="#CCCCCC" /> <!-- Light gray outline -->
+        </shape>
+    </item>
+</layer-list>
