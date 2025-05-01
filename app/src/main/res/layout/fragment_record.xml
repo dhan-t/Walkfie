@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    >
+
+    <!-- MapView like in MapFragment -->
+    <com.google.android.gms.maps.MapView
+        android:id="@+id/mapViewRecord"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:gravity="center"
+        android:background="@android:color/white"/>
+
+    <!-- Recording overlay (for later) -->
+    <LinearLayout
+        android:id="@+id/recordingOverlay"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:background="@android:color/transparent"
+        android:padding="16dp"
+        android:layout_gravity="bottom"
+        android:visibility="gone">
+
+        <!-- Just placeholders for now -->
+        <Button
+            android:id="@+id/btnStartStop"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Start" />
+
+        <TextView
+            android:id="@+id/tvTimer"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="00:00"
+            android:padding="16dp" />
+
+    </LinearLayout>
+</FrameLayout>

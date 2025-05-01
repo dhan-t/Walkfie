@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/main"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@android:color/white"
+    tools:context=".MainActivity">
+
+    <!-- Wrap everything inside one centered LinearLayout -->
+    <LinearLayout
+        android:id="@+id/contentWrapper"
+        android:orientation="vertical"
+        android:gravity="center_horizontal"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:paddingTop="60dp"
+        android:paddingBottom="60dp"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:clipChildren="false"
+        android:clipToPadding="false"
+        >
+
+        <ImageView
+            android:id="@+id/logoImage"
+            android:layout_width="150dp"
+            android:layout_height="150dp"
+            android:src="@drawable/walkfie"
+            android:layout_marginBottom="50dp"
+            android:visibility="invisible" />
+
+        <LinearLayout
+            android:id="@+id/buttonContainer"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content">
+
+            <androidx.appcompat.widget.AppCompatButton
+                android:id="@+id/button_login"
+                android:layout_width="350dp"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="20dp"
+                android:text="Login"
+                android:textAllCaps="false"
+                android:textColor="@android:color/white"
+                android:background="@drawable/rounded_button"
+                android:elevation="6dp"
+                />
+
+            <androidx.appcompat.widget.AppCompatButton
+                android:id="@+id/button_register"
+                android:layout_width="350dp"
+                android:layout_height="wrap_content"
+                android:text="Register"
+                android:textAllCaps="false"
+                android:textColor="@android:color/white"
+                android:background="@drawable/rounded_button"
+                android:elevation="6dp" />
+        </LinearLayout>
+    </LinearLayout>
+</androidx.constraintlayout.widget.ConstraintLayout>

@@ -1,0 +1,19 @@
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:state_pressed="true">
+        <objectAnimator
+            android:duration="150"
+            android:propertyName="scaleX"
+            android:valueFrom="1"
+            android:valueTo="0.96"
+            android:valueType="floatType"/>
+    </item>
+    <item>
+        <objectAnimator
+            android:duration="150"
+            android:propertyName="scaleX"
+            android:valueFrom="0.96"
+            android:valueTo="1"
+            android:valueType="floatType"/>
+    </item>
+</selector>

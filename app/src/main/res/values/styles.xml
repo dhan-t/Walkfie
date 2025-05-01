@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="RoundedButton">
+        <item name="android:background">@drawable/rounded_button</item>
+        <item name="android:textColor">@android:color/white</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:elevation">6dp</item>
+    </style>
+
+    <style name="RoundedInput">
+        <item name="android:background">@drawable/rounded_input</item>
+        <item name="android:padding">12dp</item>
+        <item name="android:textColor">@android:color/black</item>
+    </style>
+
+</resources>

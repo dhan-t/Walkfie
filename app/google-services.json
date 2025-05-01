@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "758455007628",
+    "project_id": "walkfie-cb40a",
+    "storage_bucket": "walkfie-cb40a.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:758455007628:android:49c1eabc03e2f02aa7fea9",
+        "android_client_info": {
+          "package_name": "com.example.walkfie"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCikWY-t2FwmoPAnq0LaOGuk3VuKRWzk3g"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
