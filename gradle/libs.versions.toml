@@ -1,5 +1,5 @@
 [versions]
-agp = "8.9.2"
+agp = "8.10.0"
 junit = "4.13.2"
 junitVersion = "1.2.1"
 espressoCore = "3.6.1"
@@ -23,6 +23,8 @@ facebook = "18.0.3"
 coreKtx = "1.16.0"
 kotlin = "1.9.22"
 cardview = "1.0.0"
+core = "1.16.0"
+dynamicanimation = "1.1.0"
 
 [libraries]
 core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -51,6 +53,8 @@ gms-auth = { group = "com.google.android.gms", name = "play-services-auth", vers
 facebook-android-sdk = { group = "com.facebook.android", name = "facebook-android-sdk", version.ref = "facebook" }
 play-services-location = { module = "com.google.android.gms:play-services-location", version = "21.3.0" }
 cardview = { group = "androidx.cardview", name = "cardview", version.ref = "cardview" }
+core = { group = "androidx.core", name = "core", version.ref = "core" }
+androidx-dynamicanimation = { group = "androidx.dynamicanimation", name = "dynamicanimation", version.ref = "dynamicanimation" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

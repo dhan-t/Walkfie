@@ -11,7 +11,7 @@ import com.bumptech.glide.Glide;
 
 public class SplashActivity extends AppCompatActivity {
 
-    private static final int SPLASH_DELAY = 4000; // 2 seconds
+    private static final int SPLASH_DELAY = 4500; // 2 seconds
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {

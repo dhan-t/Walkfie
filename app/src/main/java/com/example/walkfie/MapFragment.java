@@ -80,7 +80,7 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
     public void onMapReady(@NonNull GoogleMap googleMap) {
         gMap = googleMap;
 
-        gMap.getUiSettings().setZoomControlsEnabled(true);
+        gMap.getUiSettings().setZoomControlsEnabled(false);
         gMap.getUiSettings().setMyLocationButtonEnabled(true);
 
         gMap.setOnCameraMoveListener(() -> {

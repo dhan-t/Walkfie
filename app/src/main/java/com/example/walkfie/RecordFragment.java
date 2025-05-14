@@ -1,11 +1,11 @@
 package com.example.walkfie;
 
 import android.Manifest;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.location.Location;
 import android.os.Bundle;
 import android.os.Handler;
-import android.util.DisplayMetrics;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -19,6 +19,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
+import androidx.core.widget.NestedScrollView;
 import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -37,22 +38,25 @@ import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.material.bottomsheet.BottomSheetBehavior;
+import android.view.animation.Animation;
+import android.view.animation.AnimationUtils;
+import android.os.Handler;
 
-import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+
+// Callback interface so HomeActivity can talk to RecordFragment
+interface RecordFragmentCallback {
+    void onRecordingStarted(String activityType);
+    void onRecordingStopped();
+}
 
 public class RecordFragment extends Fragment implements OnMapReadyCallback, ActivityAdapter.OnActivityClickListener {
 
     private MapView mapView;
     private GoogleMap gMap;
-
-    private View recordingOverlay;
-    private Button btnStartStop;
-    private View bottomNavigationView;
-
     private static final String MAPVIEW_BUNDLE_KEY = "MapViewBundleKey";
     private static final int LOCATION_PERMISSION_CODE = 1002;
-
     private FusedLocationProviderClient fusedLocationClient;
     private LocationCallback locationCallback;
     private Marker userMarker;
@@ -64,212 +68,403 @@ public class RecordFragment extends Fragment implements OnMapReadyCallback, Acti
     private boolean isRecording = false;
     private String currentActivityType = "";
     private Location lastKnownLocation;
-    private LinearLayout bottomSheet;
-    private BottomSheetBehavior<LinearLayout> bottomSheetBehavior;
-    private RecyclerView recyclerViewActivities;
-    private ActivityAdapter activityAdapter;
-    private ImageView ivIcon1;
-    private ImageView ivIcon2;
-    private TextView tvDialogTitle;
+
+    private LinearLayout layoutRecordingInfo;
+    private TextView tvDistance, tvDuration, tvPace;
+    private Button btnPause, btnCapture, btnStop;
+    private Location previousLocation;
+    private float totalDistance = 0f;
+    private long recordingStartTime = 0L;
+    private boolean isPaused = false;
+    private Handler timerHandler = new Handler();
     private LinearLayout activityIconsLayout;
+    private long totalPausedTime = 0L;
+    private long pauseStartTime = 0L;
+    private ImageView ivRecordingIcon;
+    private TextView tvDialogTitle;
+    private LinearLayout bottomSheetContent;
+
+    // NEW bottom sheet vars
+    private NestedScrollView activityChooserSheet;
+    private BottomSheetBehavior<NestedScrollView> activityChooserBehavior;
+    private int peekHeightInPx;
+    private RecordFragmentCallback callback;
+
+    public void setRecordFragmentCallback(RecordFragmentCallback callback) {
+        this.callback = callback;
+    }
 
     public RecordFragment() {
-        // Required empty public constructor
+    // Required empty public constructor
+
     }
 
     @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container,
                              @Nullable Bundle savedInstanceState) {
-
         View view = inflater.inflate(R.layout.fragment_record, container, false);
 
         mapView = view.findViewById(R.id.mapViewRecord);
-        recordingOverlay = view.findViewById(R.id.recordingOverlay);
-        btnStartStop = view.findViewById(R.id.btnStartStop);
 
-        // Customize the dialog's window to position it at the top
-        View sheetView = requireActivity().findViewById(R.id.bottom_sheet);
-
-        // Get references to your buttons inside the dialog layout
-        ivIcon1 = sheetView.findViewById(R.id.ivIcon1);
-        ivIcon2 = sheetView.findViewById(R.id.ivIcon2);
-        tvDialogTitle = sheetView.findViewById(R.id.tvDialogTitle);
-
-        // Set click listeners
-        ivIcon1.setOnClickListener(v -> {
-            bottomSheetBehavior.setState(BottomSheetBehavior.STATE_HIDDEN);
-            startRecording("Run");
-        });
-
-        ivIcon2.setOnClickListener(v -> {
-            bottomSheetBehavior.setState(BottomSheetBehavior.STATE_HIDDEN);
-            startRecording("Ride");
-        });
+        layoutRecordingInfo = view.findViewById(R.id.layoutRecordingInfo);
+        tvDistance = view.findViewById(R.id.tvDistance);
+        tvDuration = view.findViewById(R.id.tvDuration);
+        tvPace = view.findViewById(R.id.tvPace);
+        btnPause = view.findViewById(R.id.btnPause);
+        btnCapture = view.findViewById(R.id.btnCapture);
+        btnStop = view.findViewById(R.id.btnStop);
+        activityIconsLayout = view.findViewById(R.id.activityIconsLayout);
+        ivRecordingIcon = view.findViewById(R.id.ivRecordingIcon);
+        tvDialogTitle = view.findViewById(R.id.tvDialogTitle);
 
         Bundle mapViewBundle = null;
         if (savedInstanceState != null) {
             mapViewBundle = savedInstanceState.getBundle(MAPVIEW_BUNDLE_KEY);
         }
+
         mapView.onCreate(mapViewBundle);
         mapView.getMapAsync(this);
-
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(requireActivity());
 
-        btnStartStop.setOnClickListener(v -> {
-            if (!isRecording) {
-                showActivityChooserDialog();
-            } else {
-                stopRecording();
-            }
-        });
+        // ✅ Initialize BottomSheet
+        bottomSheetContent = view.findViewById(R.id.bottom_sheet);
+        activityChooserSheet = view.findViewById(R.id.activityChooserSheet);
+        activityChooserBehavior = BottomSheetBehavior.from(activityChooserSheet);
+        int peekHeightDp = 90; // for pill visible
+        float scale = getResources().getDisplayMetrics().density;
+        peekHeightInPx = (int) (peekHeightDp * scale + 0.5f);
+        activityChooserBehavior.setPeekHeight(peekHeightInPx);
+        activityChooserBehavior.setState(BottomSheetBehavior.STATE_COLLAPSED);
+        activityChooserBehavior.addBottomSheetCallback(new BottomSheetBehavior.BottomSheetCallback() {
 
-        // get BottomNavigationView from the parent activity
-        bottomNavigationView = requireActivity().findViewById(R.id.bottomNavigation);
-
-        // Get the layout from the activity
-        bottomSheet = requireActivity().findViewById(R.id.bottom_sheet);
-
-        // Get the behavior
-        bottomSheetBehavior = BottomSheetBehavior.from(bottomSheet);
-
-        // Customize the behavior
-        bottomSheetBehavior.setPeekHeight(bottomNavigationView.getHeight());
-        bottomSheetBehavior.setState(BottomSheetBehavior.STATE_HIDDEN);
-        bottomSheetBehavior.addBottomSheetCallback(new BottomSheetBehavior.BottomSheetCallback() {
             @Override
             public void onStateChanged(@NonNull View bottomSheet, int newState) {
-                // React to state change
-                if (newState == BottomSheetBehavior.STATE_HIDDEN) {
+            // Optional: Lock states if needed
 
-                }
             }
 
             @Override
             public void onSlide(@NonNull View bottomSheet, float slideOffset) {
-                // React to dragging events
-                if (slideOffset > 0) {
-                    bottomSheetBehavior.setPeekHeight(bottomNavigationView.getHeight(), true);
-                    mapView.setClickable(false);
-                    mapView.setFocusable(false);
+            // Optional: No-op
+
+            }
+        });
+
+        // ✅ Setup sheet buttons (Run / Ride)
+        view.findViewById(R.id.ivIcon1).setOnClickListener(v -> {
+            startRecording("Run");
+            // hideBottomSheet();
+        });
+
+        view.findViewById(R.id.ivIcon2).setOnClickListener(v -> {
+            startRecording("Ride");
+            // hideBottomSheet();
+        });
+
+        // Implement the btnPause click listener
+        btnPause.setOnClickListener(v -> {
+            if (isRecording) {
+                if (!isPaused) {
+                    // Pause recording
+                    isPaused = true;
+                    stopTimer(); // Stop the timer
+                    if (fusedLocationClient != null && locationCallback != null) {
+                        fusedLocationClient.removeLocationUpdates(locationCallback);
+                    }
+                    btnPause.setText("Resume"); // Change button text
+                    Toast.makeText(requireContext(), "Recording paused", Toast.LENGTH_SHORT).show();
+                    pauseStartTime = System.currentTimeMillis(); // Record pause start time
                 } else {
-                    bottomSheetBehavior.setPeekHeight(bottomSheet.getHeight(), true);
-                    mapView.setClickable(true);
-                    mapView.setFocusable(true);
+                    // Resume recording
+                    isPaused = false;
+                    startTimer(); // Resume the timer
+                    startLocationUpdates(); // Restart location updates
+                    btnPause.setText("Pause"); // Change button text back
+                    Toast.makeText(requireContext(), "Recording resumed", Toast.LENGTH_SHORT).show();
+                    if (pauseStartTime > 0) {
+                        totalPausedTime += (System.currentTimeMillis() - pauseStartTime); // Add paused duration
+                        pauseStartTime = 0L; // Reset pause start time
+                    }
                 }
             }
         });
+        // Implement the btnCapture click listener
+        btnCapture.setOnClickListener(v -> {
+            if (gMap != null) {
+                gMap.snapshot(new GoogleMap.SnapshotReadyCallback() {
+                    @Override
+                    public void onSnapshotReady(@Nullable android.graphics.Bitmap bitmap) {
+                        if (bitmap != null) {
+                        // Handle the captured bitmap
+                        // You can display it, save it, or share it.
+                        // For example, display it in a temporary ImageView:
+                        // ImageView tempImageView = new ImageView(requireContext());
+                        // tempImageView.setImageBitmap(bitmap);
+                        // You could show this in a dialog.
+
+                            Toast.makeText(requireContext(), "Map snapshot captured", Toast.LENGTH_SHORT).show();
+                        // Example: You could pass this bitmap to a dialog fragment
+                        // CapturePhotoDialogFragment dialogFragment = CapturePhotoDialogFragment.newInstance(bitmap);
+                        // dialogFragment.show(getChildFragmentManager(), "capturePhoto");
+
+                        } else {
+                            Toast.makeText(requireContext(), "Failed to capture map snapshot", Toast.LENGTH_SHORT).show();
+                        }
+                    }
+                });
+            } else {
+                Toast.makeText(requireContext(), "Map not ready yet", Toast.LENGTH_SHORT).show();
+            }
+        });
+
+        btnStop.setOnClickListener(v -> {
+        // End recording session, hide layout or move to summary
+        // layoutRecordingInfo.setVisibility(View.GONE);
+            stopRecording();
+            hideBottomSheet();
+        });
+
+        // ✅ Setup RecyclerView in sheet
+        // RecyclerView recyclerView = view.findViewById(R.id.recyclerViewActivities);
+        // recyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
+        // List<ActivityItem> activityList = Arrays.asList(
+        // new ActivityItem("Walk", "Start Walk"),
+        // new ActivityItem("Hike", "Start Hike"),
+        // new ActivityItem("Swim", "Start Swim")
+        // );
+        // ActivityAdapter adapter = new ActivityAdapter(activityList, activity -> {
+        // startRecording(activity.getName());
+        // hideBottomSheet();
+        // });
+        // recyclerView.setAdapter(adapter);
+        // recyclerView.setVisibility(View.VISIBLE);
 
         return view;
     }
 
-    @Override
-    public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
-        super.onViewCreated(view, savedInstanceState);
+    private void showBottomSheet() {
+        if (bottomSheetContent != null) {
+            Animation slideUpAnimation = AnimationUtils.loadAnimation(requireContext(), R.anim.slide_up);
+            bottomSheetContent.startAnimation(slideUpAnimation);
+        }
+        activityChooserBehavior.setPeekHeight(peekHeightInPx);
+        activityChooserBehavior.setState(BottomSheetBehavior.STATE_COLLAPSED);
+    }
 
-        // Get the layout from the activity
-        bottomSheet = requireActivity().findViewById(R.id.bottom_sheet);
+    private void hideBottomSheet() {
+        if (bottomSheetContent != null) {
+            Animation slideDownAnimation = AnimationUtils.loadAnimation(requireContext(), R.anim.slide_down);
+            bottomSheetContent.startAnimation(slideDownAnimation);
+        }
+        activityChooserBehavior.setState(BottomSheetBehavior.STATE_HIDDEN);
+    }
 
-        // Get the behavior
-        bottomSheetBehavior = BottomSheetBehavior.from(bottomSheet);
+    private void updateRecordingMetrics(Location currentLocation) {
+        if (previousLocation != null) {
+            float distanceInMeters = previousLocation.distanceTo(currentLocation);
+            totalDistance += distanceInMeters;
+            float distanceInKilometers = totalDistance / 1000f; // Convert meters to kilometers
+            tvDistance.setText(String.format("%.2f km", distanceInKilometers));
+        }
 
-        // Customize the behavior
-        bottomSheetBehavior.setPeekHeight(bottomNavigationView.getHeight());
-        bottomSheetBehavior.setState(BottomSheetBehavior.STATE_HIDDEN);
-
-        bottomSheetBehavior.addBottomSheetCallback(new BottomSheetBehavior.BottomSheetCallback() {
-            @Override
-            public void onStateChanged(@NonNull View bottomSheet, int newState) {
-                // React to state change
-                if (newState == BottomSheetBehavior.STATE_HIDDEN) {
-
-                }
+        if (totalDistance > 0) { // Avoid division by zero
+            long elapsedMillisForSpeed = (System.currentTimeMillis() - recordingStartTime) - totalPausedTime;
+            long secondsForSpeed = elapsedMillisForSpeed / 1000;
+            if (secondsForSpeed > 0) {
+                float elapsedHours = secondsForSpeed / 3600f; // Convert seconds to hours
+                float speedKmh = (totalDistance / 1000f) / elapsedHours; // Distance (km) / Time (hours)
+                tvPace.setText(String.format("%.2f km/h", speedKmh)); // Renamed tvPace to reflect speed
+            } else {
+                tvPace.setText("0.00 km/h"); // Default value
             }
-
-            @Override
-            public void onSlide(@NonNull View bottomSheet, float slideOffset) {
-                // React to dragging events
-                if (slideOffset > 0) {
-                    bottomSheetBehavior.setPeekHeight(bottomNavigationView.getHeight(), true);
-                    mapView.setClickable(false);
-                    mapView.setFocusable(false);
-                } else {
-                    bottomSheetBehavior.setPeekHeight(BottomSheetBehavior.PEEK_HEIGHT_AUTO, true);
-                    mapView.setClickable(true);
-                    mapView.setFocusable(true);
-                }
-            }
-        });
-
-        // Get the width of the parent
-        DisplayMetrics displayMetrics = new DisplayMetrics();
-        requireActivity().getWindowManager().getDefaultDisplay().getMetrics(displayMetrics);
-        int screenWidth = displayMetrics.widthPixels;
-        // Set the width of the bottom sheet
-        ViewGroup.LayoutParams layoutParams = bottomSheet.getLayoutParams();
-        layoutParams.width = screenWidth;
-        bottomSheet.setLayoutParams(layoutParams);
-        // Set the bottom sheet's state to be hidden by default
-        bottomSheetBehavior.setState(BottomSheetBehavior.STATE_HIDDEN);
+        } else {
+            tvPace.setText("0.00 km/h"); // Default when no distance covered
+        }
+        previousLocation = currentLocation;
     }
-
-    private void showActivityChooserDialog() {
-        bottomSheetBehavior.setPeekHeight(bottomSheet.getHeight(), true);
-
-        // Set the state to collapsed
-        bottomSheetBehavior.setState(BottomSheetBehavior.STATE_COLLAPSED);
-    }
-
-    private void centerMapOnUser(Location location) {
-        LatLng userLatLng = new LatLng(location.getLatitude(), location.getLongitude());
-        CameraUpdate update = CameraUpdateFactory.newLatLngZoom(userLatLng, 16f);
-        gMap.animateCamera(update);
-        lastCameraPosition = userLatLng;
-    }
-
 
     private void startRecording(String activityType) {
-        recordingOverlay.setVisibility(View.VISIBLE);
-        btnStartStop.setText("Stop");
-        isRecording = true;
         currentActivityType = activityType;
+        isRecording = true;
+        isPaused = false;
+        previousLocation = null;
+        totalDistance = 0f;
+        totalPausedTime = 0L;
+        recordingStartTime = System.currentTimeMillis();
+
+        tvDistance.setText("0.00 km");
+        tvDuration.setText("00:00:00");
+        tvPace.setText("0.00 km/h");
+
+        // Show and set the recording icon
+        if (ivRecordingIcon != null) {
+            ivRecordingIcon.setVisibility(View.VISIBLE);
+            if (activityType.equals("Run")) {
+                ivRecordingIcon.setImageResource(R.drawable.run);
+            } else if (activityType.equals("Ride")) {
+                ivRecordingIcon.setImageResource(R.drawable.ride);
+            }
+        }
+
+        // Hide the "Record Activity" text
+        if (tvDialogTitle != null) {
+            tvDialogTitle.setVisibility(View.GONE);
+        }
+
+        if (activityIconsLayout != null && layoutRecordingInfo != null && activityChooserSheet != null && activityChooserBehavior != null) {
+            // Prepare layoutRecordingInfo
+            layoutRecordingInfo.setVisibility(View.VISIBLE);
+            layoutRecordingInfo.setAlpha(0f);
+            layoutRecordingInfo.setTranslationY(layoutRecordingInfo.getHeight()); // Start below
+
+            // Animate activityIconsLayout to slide down and out
+            activityIconsLayout.animate()
+                    .translationY(activityIconsLayout.getHeight())
+                    .alpha(0f)
+                    .setDuration(300) // Shorter duration for the hide
+                    .withEndAction(() -> {
+                        activityIconsLayout.setVisibility(View.GONE);
+
+                        // Delay the expansion of the bottom sheet
+                        new Handler().postDelayed(() -> {
+                            activityChooserBehavior.setState(BottomSheetBehavior.STATE_EXPANDED);
+
+                            // Animate layoutRecordingInfo to slide up and in
+                            layoutRecordingInfo.animate()
+                                    .translationY(0)
+                                    .alpha(1f)
+                                    .setDuration(300)
+                                    .start();
+                        }, 300); // Adjust the delay (in milliseconds) as needed
+                    })
+                    .start();
+        } else if (layoutRecordingInfo != null && activityChooserBehavior != null) {
+            // Fallback
+            layoutRecordingInfo.setVisibility(View.VISIBLE);
+            layoutRecordingInfo.setAlpha(0f);
+            layoutRecordingInfo.setTranslationY(layoutRecordingInfo.getHeight());
+            activityChooserBehavior.setState(BottomSheetBehavior.STATE_EXPANDED);
+            layoutRecordingInfo.animate()
+                    .alpha(1f)
+                    .translationY(0)
+                    .setDuration(300)
+                    .start();
+        }
+
+        // Set initial text for pause button
+        if (btnPause != null) {
+            btnPause.setText("Pause");
+        }
         Toast.makeText(requireContext(), activityType + " recording started", Toast.LENGTH_SHORT).show();
+
+        if (callback != null) {
+            callback.onRecordingStarted(activityType);
+        }
+        startLocationUpdates();
+        startTimer();
+
+        // Keep the bottom sheet collapsed initially
+        activityChooserBehavior.setState(BottomSheetBehavior.STATE_COLLAPSED);
     }
 
+    // Modify stopRecording
     private void stopRecording() {
-        recordingOverlay.setVisibility(View.VISIBLE);
-        btnStartStop.setText("Start");
-        isRecording = false; // <-- add this!
+        isRecording = false;
+        isPaused = false; // Reset paused state
+
+        // Hide the recording information layout with animation
+        if (layoutRecordingInfo != null) {
+            layoutRecordingInfo.animate()
+                    .translationY(layoutRecordingInfo.getHeight()) // Slide down and out
+                    .alpha(0f)
+                    .setDuration(300)
+                    .withEndAction(() -> layoutRecordingInfo.setVisibility(View.GONE))
+                    .start();
+        }
+        // Hide the recording icon
+        if (ivRecordingIcon != null) {
+            ivRecordingIcon.setVisibility(View.GONE);
+        }
+
+        // Show the "Record Activity" text again
+        if (tvDialogTitle != null) {
+            tvDialogTitle.setVisibility(View.VISIBLE);
+        }
+
+        // Show the activity icons layout again with animation
+        if (activityIconsLayout != null) {
+            activityIconsLayout.setVisibility(View.VISIBLE);
+            activityIconsLayout.setAlpha(0f);
+            activityIconsLayout.setTranslationY(0); // Reset translationY to bring it back to its original position
+            activityIconsLayout.animate()
+                    .alpha(1f)
+                    .setDuration(300)
+                    .withEndAction(() -> {
+                        // Ensure the bottom sheet is in a state where the icons are visible
+                        if (activityChooserBehavior != null) {
+                            activityChooserBehavior.setState(BottomSheetBehavior.STATE_COLLAPSED);
+                        // Optionally, fully expand it if that was the previous state
+
+                        // activityChooserBehavior.setState(BottomSheetBehavior.STATE_EXPANDED);
+                        }
+                    })
+                    .start();
+        }
         Toast.makeText(requireContext(), "Recording stopped", Toast.LENGTH_SHORT).show();
+
+        if (callback != null) {
+            callback.onRecordingStopped();
+        }
+
+        // Stop location updates
+        fusedLocationClient.removeLocationUpdates(locationCallback);
+
+        // Stop the timer
+        stopTimer();
+
+        // Reset recording data
+        previousLocation = null;
+        totalPausedTime = 0L;
+        totalDistance = 0f;
+        recordingStartTime = 0L;
+    }
+
+    private Runnable timerRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (isRecording && !isPaused && recordingStartTime > 0) {
+                long currentTime = System.currentTimeMillis();
+                long elapsedMillis = (currentTime - recordingStartTime) - totalPausedTime;
+                long seconds = (elapsedMillis / 1000) % 60;
+                long minutes = (elapsedMillis / (1000 * 60)) % 60;
+                long hours = elapsedMillis / (1000 * 60 * 60);
+
+                tvDuration.setText(String.format("%02d:%02d:%02d", hours, minutes, seconds));
+                timerHandler.postDelayed(this, 1000); // Update every second
+            }
+        }
+    };
+
+    private void startTimer() {
+        timerHandler.postDelayed(timerRunnable, 0);
+    }
+
+    private void stopTimer() {
+        timerHandler.removeCallbacks(timerRunnable);
     }
 
     @Override
     public void onActivityClick(ActivityItem activity) {
-        bottomSheetBehavior.setState(BottomSheetBehavior.STATE_HIDDEN);
-        startRecording(activity.getName());
-    }
-
-    public void showRecordControls() {
-        if(recordingOverlay != null && btnStartStop != null){
-            recordingOverlay.setVisibility(View.VISIBLE);
-            btnStartStop.setVisibility(View.VISIBLE);
-            // Show dialog when fragment loads
-            showActivityChooserDialog();
-        }
-    }
-
-    public void hideRecordControls() {
-        if(recordingOverlay != null && btnStartStop != null){
-            recordingOverlay.setVisibility(View.GONE);
-            btnStartStop.setVisibility(View.GONE);
-        }
+    // startRecording(activity.getName());
+    // hideBottomSheet();
+        layoutRecordingInfo.setVisibility(View.VISIBLE);
     }
 
     @Override
     public void onMapReady(@NonNull GoogleMap googleMap) {
         gMap = googleMap;
-
-        gMap.getUiSettings().setZoomControlsEnabled(true);
+        gMap.getUiSettings().setZoomControlsEnabled(false);
         gMap.getUiSettings().setMyLocationButtonEnabled(true);
 
         gMap.setOnCameraMoveListener(() -> {
@@ -284,8 +479,26 @@ public class RecordFragment extends Fragment implements OnMapReadyCallback, Acti
             recenterHandler.postDelayed(recenterRunnable, 1000);
         });
 
-
         checkLocationPermissionAndStartUpdates();
+
+        // Added: Attempt to center on the last known location immediately if available and permission granted
+        if (ContextCompat.checkSelfPermission(requireContext(),
+                Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            fusedLocationClient.getLastLocation().addOnSuccessListener(requireActivity(), location -> {
+                if (location != null) {
+                    lastKnownLocation = location;
+                    centerMapOnUser(location);
+                    isFirstLoad = false; // Mark as first load complete
+                }
+            });
+        }
+    }
+
+    private void centerMapOnUser(Location location) {
+        LatLng userLatLng = new LatLng(location.getLatitude(), location.getLongitude());
+        CameraUpdate update = CameraUpdateFactory.newLatLngZoom(userLatLng, 16f);
+        gMap.animateCamera(update);
+        lastCameraPosition = userLatLng;
     }
 
     private void checkLocationPermissionAndStartUpdates() {
@@ -297,22 +510,43 @@ public class RecordFragment extends Fragment implements OnMapReadyCallback, Acti
         }
     }
 
+    // Modify the locationCallback
     private void startLocationUpdates() {
         LocationRequest locationRequest = LocationRequest.create();
-        locationRequest.setInterval(2000); // every 2 seconds
+        locationRequest.setInterval(2000);
         locationRequest.setFastestInterval(1000);
         locationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
-        locationRequest.setMaxWaitTime(100); // don't delay batch delivery
+        locationRequest.setMaxWaitTime(100);
 
         locationCallback = new LocationCallback() {
             @Override
             public void onLocationResult(LocationResult locationResult) {
                 if (locationResult == null) return;
+
                 Location location = locationResult.getLastLocation();
-                lastKnownLocation = location;
-                if (isFollowingUser || isFirstLoad) {
-                    centerMapOnUser(location);
-                    isFirstLoad = false;
+                lastKnownLocation = location; // Update last known location
+
+                if (location != null) {
+                    LatLng latLng = new LatLng(location.getLatitude(), location.getLongitude());
+
+                // if (userMarker == null) {
+                // userMarker = gMap.addMarker(new MarkerOptions().position(latLng).title("You"));
+                // } else {
+                // userMarker.setPosition(latLng);
+                // }
+
+                // Add this check for initial centering
+                    if (isFirstLoad) {
+                        centerMapOnUser(location);
+                        isFirstLoad = false; // Mark as first load complete after centering
+                    } else if (isFollowingUser) {
+                        gMap.animateCamera(CameraUpdateFactory.newLatLngZoom(latLng, 16f));
+                    }
+
+                    // Only update metrics if recording AND NOT paused
+                    if (isRecording && !isPaused) {
+                        updateRecordingMetrics(location);
+                    }
                 }
             }
         };
@@ -322,35 +556,7 @@ public class RecordFragment extends Fragment implements OnMapReadyCallback, Acti
         }
 
         fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, null);
-        gMap.setMyLocationEnabled(true);  // optional blue dot
-    }
-
-    private Location getBestLocation(LocationResult locationResult) {
-        Location bestLocation = null;
-        for (Location location : locationResult.getLocations()) {
-            if (location != null) {
-                if (bestLocation == null || location.getAccuracy() < bestLocation.getAccuracy()) {
-                    bestLocation = location;
-                }
-            }
-        }
-        return bestLocation;
-    }
-
-    private void updateUserLocation(Location location) {
-        if (location == null) return;
-
-        LatLng userLatLng = new LatLng(location.getLatitude(), location.getLongitude());
-
-        if (userMarker == null) {
-            userMarker = gMap.addMarker(new MarkerOptions()
-                    .position(userLatLng)
-                    .title("You are here"));
-            gMap.animateCamera(CameraUpdateFactory.newLatLngZoom(userLatLng, 16f));
-        } else {
-            userMarker.setPosition(userLatLng);
-            gMap.animateCamera(CameraUpdateFactory.newLatLng(userLatLng));
-        }
+        gMap.setMyLocationEnabled(true);
     }
 
     @Override
@@ -376,6 +582,7 @@ public class RecordFragment extends Fragment implements OnMapReadyCallback, Acti
     public void onStart() {
         super.onStart();
         mapView.onStart();
+        showBottomSheet();
     }
 
     @Override
@@ -385,6 +592,7 @@ public class RecordFragment extends Fragment implements OnMapReadyCallback, Acti
         if (fusedLocationClient != null && locationCallback != null) {
             fusedLocationClient.removeLocationUpdates(locationCallback);
         }
+        stopTimer();
     }
 
     @Override
@@ -397,6 +605,7 @@ public class RecordFragment extends Fragment implements OnMapReadyCallback, Acti
     public void onDestroy() {
         mapView.onDestroy();
         super.onDestroy();
+        stopTimer();
     }
 
     @Override

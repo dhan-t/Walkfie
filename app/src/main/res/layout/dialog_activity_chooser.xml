@@ -5,18 +5,26 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
-    android:padding="24dp"
+    android:padding="32dp"
     android:background="@drawable/bottom_sheet_background"
     app:behavior_hideable="false"
     app:behavior_peekHeight="auto"
+    android:clipToPadding="false"
     app:layout_behavior="com.google.android.material.bottomsheet.BottomSheetBehavior">
+
+    <View
+        android:layout_width="40dp"
+        android:layout_height="5dp"
+        android:background="@drawable/pill_shape"
+        android:layout_marginBottom="32dp"
+        android:layout_gravity="center"/>
 
     <TextView
         android:id="@+id/tvDialogTitle"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginBottom="24dp"
-        android:text="Record activity"
+        android:text="Record Activity"
         android:textAlignment="center"
         android:textColor="@android:color/black"
         android:textSize="24sp"

@@ -39,6 +39,8 @@
         <activity
             android:name=".LoginActivity"
             android:exported="false" />
+        <activity android:name=".ActiveRecordingActivity"
+            android:exported="false" />
         <activity
             android:name=".SplashActivity"
             android:exported="true"
