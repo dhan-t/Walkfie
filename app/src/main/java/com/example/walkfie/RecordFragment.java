@@ -3,9 +3,11 @@ package com.example.walkfie;
 import android.Manifest;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
 import android.location.Location;
 import android.os.Bundle;
 import android.os.Handler;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -45,8 +47,24 @@ import android.view.animation.Animation;
 import android.view.animation.AnimationUtils;
 import android.os.Handler;
 
+import java.io.ByteArrayOutputStream;
 import java.util.Arrays;
 import java.util.List;
+import com.google.firebase.storage.FirebaseStorage;
+import com.google.firebase.storage.StorageReference;
+import com.google.firebase.storage.UploadTask;
+import android.graphics.Canvas;
+import android.graphics.Paint;
+import android.graphics.Path;
+import android.graphics.RectF;
+import android.graphics.BitmapShader;
+import android.graphics.Shader;
+import com.bumptech.glide.request.target.CustomTarget;
+import com.bumptech.glide.request.transition.Transition;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.firestore.FirebaseFirestore;
+import com.bumptech.glide.Glide;
+import android.graphics.drawable.Drawable;
 
 // Callback interface so HomeActivity can talk to RecordFragment
 interface RecordFragmentCallback {
@@ -94,6 +112,19 @@ public class RecordFragment extends Fragment implements OnMapReadyCallback, Acti
     private int peekHeightInPx;
     private RecordFragmentCallback callback;
 
+    // Firebase variables
+    private FirebaseAuth mAuth;
+    private FirebaseFirestore db;
+    private String currentUserId;
+    private String currentUserProfilePicUrl;
+
+    // Path tracking variables
+    private List<LatLng> recordedPath = new java.util.ArrayList<>();
+    private com.google.android.gms.maps.model.Polyline pathPolyline;
+
+    // NEW: Last uploaded map image URL
+    private String lastMapImageUrl = null;
+
     public void setRecordFragmentCallback(RecordFragmentCallback callback) {
         this.callback = callback;
     }
@@ -117,6 +148,8 @@ public class RecordFragment extends Fragment implements OnMapReadyCallback, Acti
         tvPace = view.findViewById(R.id.tvPace);
         btnPause = view.findViewById(R.id.btnPause);
         btnCapture = view.findViewById(R.id.btnCapture);
+        // Disable capture button initially
+        btnCapture.setEnabled(false);
         btnStop = view.findViewById(R.id.btnStop);
         activityIconsLayout = view.findViewById(R.id.activityIconsLayout);
         ivRecordingIcon = view.findViewById(R.id.ivRecordingIcon);
@@ -135,11 +168,9 @@ public class RecordFragment extends Fragment implements OnMapReadyCallback, Acti
         ivProfileIcon.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                // *** MODIFIED CODE HERE ***
                 if (callback != null) {
-                    callback.navigateToProfile(); // Call the callback method
+                    callback.navigateToProfile();
                 } else {
-                    // This toast helps if the callback isn't set, which means HomeActivity didn't call setRecordFragmentCallback()
                     Toast.makeText(getContext(), "Error: Navigation callback not set!", Toast.LENGTH_SHORT).show();
                 }
             }
@@ -209,26 +240,48 @@ public class RecordFragment extends Fragment implements OnMapReadyCallback, Acti
         });
         // Implement the btnCapture click listener
         btnCapture.setOnClickListener(v -> {
+            if (!isRecording) {
+                Toast.makeText(requireContext(), "Start recording to capture a map snapshot!", Toast.LENGTH_SHORT).show();
+                return;
+            }
             if (gMap != null) {
-                gMap.snapshot(new GoogleMap.SnapshotReadyCallback() {
-                    @Override
-                    public void onSnapshotReady(@Nullable android.graphics.Bitmap bitmap) {
-                        if (bitmap != null) {
-                            // Handle the captured bitmap
-                            // You can display it, save it, or share it.
-                            // For example, display it in a temporary ImageView:
-                            // ImageView tempImageView = new ImageView(requireContext());
-                            // tempImageView.setImageBitmap(bitmap);
-                            // You could show this in a dialog.
-
-                            Toast.makeText(requireContext(), "Map snapshot captured", Toast.LENGTH_SHORT).show();
-                            // Example: You could pass this bitmap to a dialog fragment
-                            // CapturePhotoDialogFragment dialogFragment = CapturePhotoDialogFragment.newInstance(bitmap);
-                            // dialogFragment.show(getChildFragmentManager(), "capturePhoto");
-
-                        } else {
-                            Toast.makeText(requireContext(), "Failed to capture map snapshot", Toast.LENGTH_SHORT).show();
-                        }
+                // Disable both Capture and Stop during upload
+                btnCapture.setText("Uploading...");
+                btnCapture.setEnabled(false);
+                btnStop.setEnabled(false);
+                gMap.snapshot(bitmap -> {
+                    if (bitmap != null) {
+                        uploadMapSnapshotToFirebase(bitmap, new OnMapImageUploadedListener() {
+                            @Override
+                            public void onSuccess(String url) {
+                                requireActivity().runOnUiThread(() -> {
+                                    Toast.makeText(requireContext(), "Map snapshot uploaded!", Toast.LENGTH_SHORT).show();
+                                    btnCapture.setText("Capture");
+                                    btnCapture.setEnabled(true);
+                                    btnStop.setEnabled(true);
+                                    // Only save record if still recording
+                                    if (isRecording) {
+                                        saveRecordToFirestoreWithImage(url);
+                                    } else {
+                                        Toast.makeText(requireContext(), "Recording stopped before upload finished.", Toast.LENGTH_SHORT).show();
+                                    }
+                                });
+                            }
+                            @Override
+                            public void onFailure(String error) {
+                                requireActivity().runOnUiThread(() -> {
+                                    Toast.makeText(requireContext(), "Failed to upload map snapshot: " + error, Toast.LENGTH_SHORT).show();
+                                    btnCapture.setText("Capture");
+                                    btnCapture.setEnabled(true);
+                                    btnStop.setEnabled(true);
+                                });
+                            }
+                        });
+                    } else {
+                        Toast.makeText(requireContext(), "Failed to capture map snapshot", Toast.LENGTH_SHORT).show();
+                        btnCapture.setText("Capture");
+                        btnCapture.setEnabled(true);
+                        btnStop.setEnabled(true);
                     }
                 });
             } else {
@@ -237,8 +290,8 @@ public class RecordFragment extends Fragment implements OnMapReadyCallback, Acti
         });
 
         btnStop.setOnClickListener(v -> {
-            // End recording session, hide layout or move to summary
-            // layoutRecordingInfo.setVisibility(View.GONE);
+            Toast.makeText(requireContext(), "Attempting to save record...", Toast.LENGTH_SHORT).show();
+            saveRecordToFirestore();
             stopRecording();
             hideBottomSheet();
         });
@@ -258,7 +311,164 @@ public class RecordFragment extends Fragment implements OnMapReadyCallback, Acti
         // recyclerView.setAdapter(adapter);
         // recyclerView.setVisibility(View.VISIBLE);
 
+        mAuth = FirebaseAuth.getInstance();
+        db = FirebaseFirestore.getInstance();
+        if (mAuth.getCurrentUser() != null) {
+            currentUserId = mAuth.getCurrentUser().getUid();
+            db.collection("users").document(currentUserId)
+                .addSnapshotListener((snapshot, e) -> {
+                    if (e != null) return;
+                    if (snapshot != null && snapshot.exists()) {
+                        currentUserProfilePicUrl = snapshot.getString("profilePicUrl");
+                        if (currentUserProfilePicUrl != null && !currentUserProfilePicUrl.isEmpty()) {
+                            Glide.with(requireContext())
+                                .load(currentUserProfilePicUrl)
+                                .placeholder(R.drawable.ic_default_profile_placeholder)
+                                .error(R.drawable.ic_default_profile_placeholder)
+                                .into(ivProfileIcon);
+                        } else {
+                            ivProfileIcon.setImageResource(R.drawable.ic_default_profile_placeholder);
+                        }
+                    }
+                });
+        }
+
         return view;
+    }
+
+    // Helper to upload map snapshot to Firebase Storage
+    private void uploadMapSnapshotToFirebase(Bitmap bitmap, OnMapImageUploadedListener listener) {
+        if (bitmap == null || currentUserId == null) {
+            listener.onFailure("Bitmap or user ID is null");
+            return;
+        }
+        FirebaseStorage storage = FirebaseStorage.getInstance();
+        String fileName = "map_snapshots/" + currentUserId + "/" + System.currentTimeMillis() + ".jpg";
+        StorageReference ref = storage.getReference().child(fileName);
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        bitmap.compress(Bitmap.CompressFormat.JPEG, 90, baos);
+        byte[] data = baos.toByteArray();
+        UploadTask uploadTask = ref.putBytes(data);
+        uploadTask.addOnSuccessListener(taskSnapshot ->
+            ref.getDownloadUrl().addOnSuccessListener(uri -> {
+                lastMapImageUrl = uri.toString();
+                listener.onSuccess(lastMapImageUrl);
+            }).addOnFailureListener(e -> listener.onFailure(e.getMessage()))
+        ).addOnFailureListener(e -> listener.onFailure(e.getMessage()));
+    }
+
+    // Listener interface for upload callback
+    private interface OnMapImageUploadedListener {
+        void onSuccess(String url);
+        void onFailure(String error);
+    }
+
+    private void saveRecordToFirestore() {
+        Log.d("RecordFragment", "saveRecordToFirestore() called");
+        if (db == null) {
+            Log.e("RecordFragment", "Firestore db is null!");
+            Toast.makeText(getContext(), "Firestore db is null!", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (currentUserId == null) {
+            Log.e("RecordFragment", "User not logged in!");
+            Toast.makeText(getContext(), "User not logged in!", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        Log.d("RecordFragment", "recordingStartTime: " + recordingStartTime + ", recordedPath.size(): " + recordedPath.size());
+        if (recordingStartTime > 0 && recordedPath.size() >= 1) {
+            Toast.makeText(getContext(), "Saving record to Firestore...", Toast.LENGTH_SHORT).show();
+            long duration = System.currentTimeMillis() - recordingStartTime - totalPausedTime;
+            float avgPace = (duration > 0) ? (totalDistance / (duration / 1000f / 60f)) : 0f; // meters per min
+            java.util.Map<String, Object> record = new java.util.HashMap<>();
+            record.put("userId", currentUserId);
+            record.put("activityType", currentActivityType);
+            record.put("distance", totalDistance);
+            record.put("duration", duration);
+            record.put("avgPace", avgPace);
+            record.put("timestamp", com.google.firebase.Timestamp.now());
+            java.util.List<java.util.Map<String, Double>> pathList = new java.util.ArrayList<>();
+            for (LatLng latLng : recordedPath) {
+                java.util.Map<String, Double> point = new java.util.HashMap<>();
+                point.put("lat", latLng.latitude);
+                point.put("lng", latLng.longitude);
+                pathList.add(point);
+            }
+            record.put("path", pathList);
+            Log.d("RecordFragment", "Attempting to add record to Firestore: " + record.toString());
+            db.collection("records").add(record)
+                .addOnSuccessListener(documentReference -> {
+                    Log.d("RecordFragment", "Record saved! Document ID: " + documentReference.getId());
+                    Toast.makeText(getContext(), "Record saved!", Toast.LENGTH_SHORT).show();
+                })
+                .addOnFailureListener(e -> {
+                    Log.e("RecordFragment", "Failed to save record: " + e.getMessage(), e);
+                    Toast.makeText(getContext(), "Failed to save record: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                });
+        } else {
+            Log.w("RecordFragment", "Not saving: No path or recording not started. recordingStartTime=" + recordingStartTime + ", recordedPath.size()=" + recordedPath.size());
+            Toast.makeText(getContext(), "Not saving: No path or recording not started.", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    // Save record with map image URL
+    private void saveRecordToFirestoreWithImage(String mapImageUrl) {
+        Log.d("RecordFragment", "saveRecordToFirestoreWithImage() called with mapImageUrl: " + mapImageUrl);
+        if (db == null) {
+            Log.e("RecordFragment", "Firestore db is null!");
+            Toast.makeText(getContext(), "Firestore db is null!", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (currentUserId == null) {
+            Log.e("RecordFragment", "User not logged in!");
+            Toast.makeText(getContext(), "User not logged in!", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        Log.d("RecordFragment", "recordingStartTime: " + recordingStartTime + ", recordedPath.size(): " + recordedPath.size());
+        if (recordingStartTime > 0 && recordedPath.size() >= 1) {
+            Toast.makeText(getContext(), "Saving record with image to Firestore...", Toast.LENGTH_SHORT).show();
+            long duration = System.currentTimeMillis() - recordingStartTime - totalPausedTime;
+            float avgPace = (duration > 0) ? (totalDistance / (duration / 1000f / 60f)) : 0f;
+            java.util.Map<String, Object> record = new java.util.HashMap<>();
+            record.put("userId", currentUserId);
+            record.put("activityType", currentActivityType);
+            record.put("distance", totalDistance);
+            record.put("duration", duration);
+            record.put("avgPace", avgPace);
+            record.put("timestamp", com.google.firebase.Timestamp.now());
+            record.put("mapImageUrl", mapImageUrl);
+            java.util.List<java.util.Map<String, Double>> pathList = new java.util.ArrayList<>();
+            for (LatLng latLng : recordedPath) {
+                java.util.Map<String, Double> point = new java.util.HashMap<>();
+                point.put("lat", latLng.latitude);
+                point.put("lng", latLng.longitude);
+                pathList.add(point);
+            }
+            record.put("path", pathList);
+            Log.d("RecordFragment", "Attempting to add record with image to Firestore: " + record.toString());
+            db.collection("records").add(record)
+                .addOnSuccessListener(documentReference -> {
+                    Log.d("RecordFragment", "Record with map image saved! Document ID: " + documentReference.getId());
+                    requireActivity().runOnUiThread(() -> {
+                        Toast.makeText(getContext(), "Record with map image saved!", Toast.LENGTH_SHORT).show();
+                        btnCapture.setEnabled(true);
+                        btnStop.setEnabled(true);
+                    });
+                })
+                .addOnFailureListener(e -> {
+                    Log.e("RecordFragment", "Failed to save record with image: " + e.getMessage(), e);
+                    requireActivity().runOnUiThread(() -> {
+                        Toast.makeText(getContext(), "Failed to save record: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                        btnCapture.setEnabled(true);
+                        btnStop.setEnabled(true);
+                    });
+                });
+        } else {
+            Log.w("RecordFragment", "Not saving: No path or recording not started. recordingStartTime=" + recordingStartTime + ", recordedPath.size()=" + recordedPath.size());
+            Toast.makeText(getContext(), "Not saving: No path or recording not started.", Toast.LENGTH_SHORT).show();
+            btnCapture.setEnabled(true);
+            btnStop.setEnabled(true);
+        }
     }
 
     @Override
@@ -302,8 +512,16 @@ public class RecordFragment extends Fragment implements OnMapReadyCallback, Acti
             float distanceInKilometers = totalDistance / 1000f; // Convert meters to kilometers
             tvDistance.setText(String.format("%.2f km", distanceInKilometers));
         }
+        // Track path
+        if (isRecording && !isPaused && currentLocation != null) {
+            LatLng latLng = new LatLng(currentLocation.getLatitude(), currentLocation.getLongitude());
+            recordedPath.add(latLng);
+            // Toast.makeText(getContext(), "Path point added: " + latLng.latitude + ", " + latLng.longitude, Toast.LENGTH_SHORT).show();
+            drawPathOnMap();
+        }
 
-        if (totalDistance > 0) { // Avoid division by zero
+        if (totalDistance > 0) // Avoid division by zero
+        {
             long elapsedMillisForSpeed = (System.currentTimeMillis() - recordingStartTime) - totalPausedTime;
             long secondsForSpeed = elapsedMillisForSpeed / 1000;
             if (secondsForSpeed > 0) {
@@ -317,6 +535,15 @@ public class RecordFragment extends Fragment implements OnMapReadyCallback, Acti
             tvPace.setText("0.00 km/h"); // Default when no distance covered
         }
         previousLocation = currentLocation;
+    }
+
+    private void drawPathOnMap() {
+        if (gMap == null || recordedPath.isEmpty()) return;
+        if (pathPolyline != null) pathPolyline.remove();
+        pathPolyline = gMap.addPolyline(new com.google.android.gms.maps.model.PolylineOptions()
+                .addAll(recordedPath)
+                .color(android.graphics.Color.BLUE)
+                .width(10f));
     }
 
     private void startRecording(String activityType) {
@@ -463,6 +690,12 @@ public class RecordFragment extends Fragment implements OnMapReadyCallback, Acti
         totalPausedTime = 0L;
         totalDistance = 0f;
         recordingStartTime = 0L;
+        // Clear path
+        recordedPath.clear();
+        if (pathPolyline != null) {
+            pathPolyline.remove();
+            pathPolyline = null;
+        }
     }
 
     private Runnable timerRunnable = new Runnable() {
@@ -556,7 +789,10 @@ public class RecordFragment extends Fragment implements OnMapReadyCallback, Acti
         locationCallback = new LocationCallback() {
             @Override
             public void onLocationResult(LocationResult locationResult) {
-                if (locationResult == null) return;
+                if (locationResult == null) {
+                    Toast.makeText(getContext(), "No location updates received!", Toast.LENGTH_SHORT).show();
+                    return;
+                }
 
                 Location location = locationResult.getLastLocation();
                 lastKnownLocation = location; // Update last known location
@@ -582,16 +818,66 @@ public class RecordFragment extends Fragment implements OnMapReadyCallback, Acti
                     if (isRecording && !isPaused) {
                         updateRecordingMetrics(location);
                     }
+                    setCustomUserMarker(latLng);
                 }
             }
         };
 
         if (ActivityCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            Toast.makeText(getContext(), "Location permission not granted!", Toast.LENGTH_SHORT).show();
             return;
         }
 
         fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, null);
         gMap.setMyLocationEnabled(true);
+    }
+
+    // Helper to create a pin-shaped marker with profile image
+    private void setCustomUserMarker(LatLng latLng) {
+        if (currentUserProfilePicUrl == null || getContext() == null || gMap == null) return;
+        Glide.with(requireContext())
+            .asBitmap()
+            .load(currentUserProfilePicUrl)
+            .circleCrop()
+            .into(new CustomTarget<Bitmap>(120, 120) {
+                @Override
+                public void onResourceReady(@NonNull Bitmap resource, @Nullable Transition<? super Bitmap> transition) {
+                    Bitmap markerBitmap = createPinMarkerBitmap(resource);
+                    if (userMarker == null) {
+                        userMarker = gMap.addMarker(new MarkerOptions().position(latLng).icon(com.google.android.gms.maps.model.BitmapDescriptorFactory.fromBitmap(markerBitmap)).anchor(0.5f, 1f));
+                    } else {
+                        userMarker.setPosition(latLng);
+                        userMarker.setIcon(com.google.android.gms.maps.model.BitmapDescriptorFactory.fromBitmap(markerBitmap));
+                    }
+                }
+                @Override
+                public void onLoadCleared(@Nullable Drawable placeholder) {}
+            });
+    }
+
+    // Helper to create a pin-shaped bitmap with the profile image
+    private Bitmap createPinMarkerBitmap(Bitmap profileBitmap) {
+        int width = 120, height = 160;
+        Bitmap output = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(output);
+        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        // Draw pin shape
+        Path pinPath = new Path();
+        pinPath.moveTo(width / 2f, height);
+        pinPath.cubicTo(width * 0.1f, height * 0.7f, width * 0.1f, height * 0.3f, width / 2f, width / 2f);
+        pinPath.cubicTo(width * 0.9f, height * 0.3f, width * 0.9f, height * 0.7f, width / 2f, height);
+        paint.setColor(0xFF222222); // dark pin
+        canvas.drawPath(pinPath, paint);
+        // Draw white circle for profile
+        paint.setColor(0xFFFFFFFF);
+        float cx = width / 2f, cy = width / 2f, radius = width * 0.4f;
+        canvas.drawCircle(cx, cy, radius + 6, paint);
+        // Draw profile image as circle
+        BitmapShader shader = new BitmapShader(profileBitmap, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP);
+        paint.setShader(shader);
+        canvas.drawCircle(cx, cy, radius, paint);
+        paint.setShader(null);
+        return output;
     }
 
     @Override
@@ -658,5 +944,24 @@ public class RecordFragment extends Fragment implements OnMapReadyCallback, Acti
             outState.putBundle(MAPVIEW_BUNDLE_KEY, mapViewBundle);
         }
         mapView.onSaveInstanceState(mapViewBundle);
+    }
+
+    @Override
+    public void onDestroyView() {
+        // Clean up mapView and handlers to prevent view persistence/memory leaks
+        if (mapView != null) {
+            mapView.onDestroy();
+        }
+        if (fusedLocationClient != null && locationCallback != null) {
+            fusedLocationClient.removeLocationUpdates(locationCallback);
+        }
+        if (timerHandler != null) {
+            timerHandler.removeCallbacksAndMessages(null);
+        }
+        if (recenterHandler != null) {
+            recenterHandler.removeCallbacksAndMessages(null);
+        }
+        callback = null;
+        super.onDestroyView();
     }
 }

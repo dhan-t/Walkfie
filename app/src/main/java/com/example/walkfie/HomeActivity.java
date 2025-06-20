@@ -62,6 +62,7 @@ public class HomeActivity extends AppCompatActivity implements
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        mAuth = FirebaseAuth.getInstance(); // Ensure mAuth is always initialized
         setContentView(R.layout.activity_home);
         fragmentContainer = findViewById(R.id.fragment_container);
         bottomNavigationView = findViewById(R.id.bottomNavigation);
@@ -149,46 +150,41 @@ public class HomeActivity extends AppCompatActivity implements
     }
 
     private void showBottomNavFragment(Fragment fragmentToShow) {
+        // Always set callbacks for fragments that need them before showing
+        if (fragmentToShow instanceof HomeFragment) {
+            ((HomeFragment) fragmentToShow).setHomeFragmentCallback(this);
+        } else if (fragmentToShow instanceof RecordFragment) {
+            ((RecordFragment) fragmentToShow).setRecordFragmentCallback(this);
+        } else if (fragmentToShow instanceof MapFragment) {
+            ((MapFragment) fragmentToShow).setMapFragmentCallback(this);
+        } else if (fragmentToShow instanceof ProfileFragment) {
+            ((ProfileFragment) fragmentToShow).setProfileFragmentCallback(this);
+        } else if (fragmentToShow instanceof MessageFragment) {
+            ((MessageFragment) fragmentToShow).setMessageFragmentCallback(this);
+        }
         FragmentTransaction transaction = fragmentManager.beginTransaction();
         transaction.setCustomAnimations(android.R.anim.fade_in, android.R.anim.fade_out,
-                android.R.anim.fade_in, android.R.anim.fade_out); // For pop transitions
-
-        // Hide current fragment only if it's different from the one to show
-        if (currentFragment != null && currentFragment != fragmentToShow) {
-            transaction.hide(currentFragment);
-            Log.d(TAG, "Hiding bottom nav fragment: " + currentFragment.getClass().getSimpleName());
-        }
-
-        if (!fragmentToShow.isAdded()) {
-            String tag;
-            if (fragmentToShow == homeFragment) tag = "HOME_FRAGMENT";
-            else if (fragmentToShow == photoFragment) tag = "PHOTO_FRAGMENT";
-            else if (fragmentToShow == recordFragment) tag = "RECORD_FRAGMENT";
-            else if (fragmentToShow == mapFragment) tag = "MAP_FRAGMENT";
-            else if (fragmentToShow == messageFragment) tag = "MESSAGE_FRAGMENT";
-            else if (fragmentToShow == profileFragment) tag = "PROFILE_FRAGMENT_TAG";
-            else tag = fragmentToShow.getClass().getSimpleName().toUpperCase() + "_FRAGMENT_TAG"; // Fallback tag
-            transaction.add(R.id.fragment_container, fragmentToShow, tag);
-            Log.d(TAG, "Adding bottom nav fragment: " + fragmentToShow.getClass().getSimpleName() + " with tag: " + tag);
-        } else {
-            transaction.show(fragmentToShow);
-            Log.d(TAG, "Showing existing bottom nav fragment: " + fragmentToShow.getClass().getSimpleName());
-        }
+                android.R.anim.fade_in, android.R.anim.fade_out);
+        transaction.replace(R.id.fragment_container, fragmentToShow, getFragmentTag(fragmentToShow));
         transaction.commit();
-        currentFragment = fragmentToShow; // Update current fragment after commit
+        currentFragment = fragmentToShow;
+    }
+
+    // Helper to get consistent fragment tags
+    private String getFragmentTag(Fragment fragment) {
+        if (fragment == homeFragment) return "HOME_FRAGMENT";
+        if (fragment == photoFragment) return "PHOTO_FRAGMENT";
+        if (fragment == recordFragment) return "RECORD_FRAGMENT";
+        if (fragment == mapFragment) return "MAP_FRAGMENT";
+        if (fragment == messageFragment) return "MESSAGE_FRAGMENT";
+        if (fragment == profileFragment) return "PROFILE_FRAGMENT_TAG";
+        return fragment.getClass().getSimpleName().toUpperCase() + "_FRAGMENT_TAG";
     }
 
     private void loadInitialBottomNavFragments() {
         Log.d(TAG, "Loading initial bottom nav fragments...");
         FragmentTransaction transaction = fragmentManager.beginTransaction();
-        transaction.add(R.id.fragment_container, homeFragment, "HOME_FRAGMENT");
-        transaction.add(R.id.fragment_container, photoFragment, "PHOTO_FRAGMENT").hide(photoFragment);
-        transaction.add(R.id.fragment_container, recordFragment, "RECORD_FRAGMENT").hide(recordFragment);
-        transaction.add(R.id.fragment_container, mapFragment, "MAP_FRAGMENT").hide(mapFragment);
-        transaction.add(R.id.fragment_container, messageFragment, "MESSAGE_FRAGMENT").hide(messageFragment);
-        if (!profileFragment.isAdded()) { // Ensure profileFragment is also initially added if it's a root bottom nav fragment
-            transaction.add(R.id.fragment_container, profileFragment, "PROFILE_FRAGMENT_TAG").hide(profileFragment);
-        }
+        transaction.replace(R.id.fragment_container, homeFragment, "HOME_FRAGMENT");
         transaction.commit();
         currentFragment = homeFragment;
         Log.d(TAG, "Initial currentFragment: " + currentFragment.getClass().getSimpleName());
@@ -268,6 +264,11 @@ public class HomeActivity extends AppCompatActivity implements
 
     @Override
     public void navigateToProfile() {
+        if (mAuth == null) {
+            Toast.makeText(this, "Auth not initialized. Please restart the app.", Toast.LENGTH_SHORT).show();
+            Log.e(TAG, "mAuth is null in navigateToProfile!");
+            return;
+        }
         FirebaseUser currentUser = mAuth.getCurrentUser();
         if (currentUser != null) {
             // Call the new, more general method with the current user's ID
@@ -275,6 +276,7 @@ public class HomeActivity extends AppCompatActivity implements
         } else {
             Toast.makeText(this, "User not logged in to view profile.", Toast.LENGTH_SHORT).show();
             Log.w(TAG, "Attempted to navigate to profile, but user is not logged in.");
+            return;
         }
 
         FragmentTransaction transaction = fragmentManager.beginTransaction();
@@ -308,11 +310,16 @@ public class HomeActivity extends AppCompatActivity implements
     @Override
     public void onBackPressed() {
         Log.d(TAG, "onBackPressed called. Back stack entry count: " + fragmentManager.getBackStackEntryCount());
-
         if (fragmentManager.getBackStackEntryCount() > 0) {
-            fragmentManager.popBackStack(); // Pop the top fragment from the stack
+            fragmentManager.popBackStack();
         } else {
-            super.onBackPressed(); // Let the system handle if back stack is empty (exit app)
+            // Instead of exiting, always show the last selected bottom nav fragment
+            if (lastSelectedBottomNavFragment != null && currentFragment != lastSelectedBottomNavFragment) {
+                showBottomNavFragment(lastSelectedBottomNavFragment);
+            } else {
+                // Only exit if already on the root fragment
+                super.onBackPressed();
+            }
         }
     }
 
@@ -343,9 +350,9 @@ public class HomeActivity extends AppCompatActivity implements
 
     @Override
     public void navigateToSettings() {
-        // Navigate to SettingsFragment instead of SavedPostsFragment
         getSupportFragmentManager()
             .beginTransaction()
+            .setCustomAnimations(android.R.anim.fade_in, android.R.anim.fade_out, android.R.anim.fade_in, android.R.anim.fade_out)
             .replace(R.id.fragment_container, new SettingsFragment())
             .addToBackStack(null)
             .commit();

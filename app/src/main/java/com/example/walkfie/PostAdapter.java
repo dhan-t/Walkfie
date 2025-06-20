@@ -58,7 +58,34 @@ public class PostAdapter extends RecyclerView.Adapter<PostAdapter.PostViewHolder
         // For commentsCount, ensure Post.java has getCommentsCount() getter for the 'commentsCount' field.
         // It seems you've added commentsCount to Post.java, so this line should be fine now.
         holder.tvViewAllComments.setText("View all " + post.getCommentsCount() + " comments");
-        holder.tvPostTime.setText(getFormattedTime(post.getTimestamp()));
+
+        // Show edited tag if post has been edited
+        boolean isEdited = false;
+        Date editedAt = null;
+        if (post instanceof Post) {
+            try {
+                // If you add edited and editedAt fields to Post, use getters here
+                java.lang.reflect.Method getEdited = post.getClass().getMethod("getEdited");
+                Object editedValue = getEdited.invoke(post);
+                if (editedValue instanceof Boolean) {
+                    isEdited = (Boolean) editedValue;
+                }
+            } catch (Exception ignored) {}
+            try {
+                java.lang.reflect.Method getEditedAt = post.getClass().getMethod("getEditedAt");
+                Object editedAtValue = getEditedAt.invoke(post);
+                if (editedAtValue instanceof Date) {
+                    editedAt = (Date) editedAtValue;
+                } else if (editedAtValue instanceof com.google.firebase.Timestamp) {
+                    editedAt = ((com.google.firebase.Timestamp) editedAtValue).toDate();
+                }
+            } catch (Exception ignored) {}
+        }
+        if (isEdited && editedAt != null) {
+            holder.tvPostTime.setText("Edited the post " + getFormattedTime(editedAt));
+        } else {
+            holder.tvPostTime.setText(getFormattedTime(post.getTimestamp()));
+        }
 
         // --- Load images using Glide ---
         // Load Profile Picture (always use userProfilePicUrl)

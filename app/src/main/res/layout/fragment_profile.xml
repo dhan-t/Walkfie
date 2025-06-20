@@ -285,6 +285,18 @@
                     android:visibility="gone"
                     tools:visibility="visible" />
 
+                <!-- New: Map Images Gallery -->
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/rvMapImages"
+                    android:layout_width="match_parent"
+                    android:layout_height="100dp"
+                    android:layout_marginTop="12dp"
+                    android:visibility="gone"
+                    android:orientation="horizontal"
+                    app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
+                    tools:listitem="@layout/item_map_image"
+                    tools:itemCount="3" />
+
                 <TextView
                     android:id="@+id/tvNoMapDataMessage"
                     android:layout_width="wrap_content"

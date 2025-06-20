@@ -27,6 +27,8 @@ import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.maps.CameraUpdateFactory;
+import com.google.android.gms.maps.model.PolylineOptions;
+import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
@@ -36,6 +38,7 @@ import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.ListenerRegistration;
 import com.google.firebase.firestore.Query;
 import com.google.firebase.firestore.QueryDocumentSnapshot;
+import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.Timestamp;
 
 import java.util.ArrayList;
@@ -101,6 +104,11 @@ public class ProfileFragment extends Fragment implements OnMapReadyCallback {
     private ProfilePostsAdapter profilePostsAdapter;
     private List<Post> postsList;
 
+    // Map images section
+    private RecyclerView rvMapImages;
+    private MapImageAdapter mapImageAdapter;
+    private List<String> mapImageUrls = new ArrayList<>();
+
     private ProfileFragmentCallback callback;
 
     // Firebase instances
@@ -147,11 +155,7 @@ public class ProfileFragment extends Fragment implements OnMapReadyCallback {
         if (context instanceof ProfileFragmentCallback) {
             callback = (ProfileFragmentCallback) context;
         } else {
-            // It's often better to log a warning here if the fragment can still function
-            // without the callback, or provide a default no-op implementation.
-            // If the callback is absolutely mandatory for core functionality, then throw.
             Log.e(TAG, "Host Activity must implement ProfileFragmentCallback");
-            // throw new RuntimeException(context.toString() + " must implement ProfileFragmentCallback");
         }
     }
 
@@ -222,6 +226,12 @@ public class ProfileFragment extends Fragment implements OnMapReadyCallback {
         rvPosts = view.findViewById(R.id.rvPosts);
         tvNoPostsMessage = view.findViewById(R.id.tvNoPostsMessage);
         btnCreatePost = view.findViewById(R.id.btnCreatePost);
+
+        rvMapImages = view.findViewById(R.id.rvMapImages);
+        mapImageAdapter = new MapImageAdapter(getContext(), mapImageUrls);
+        rvMapImages.setAdapter(mapImageAdapter);
+        rvMapImages.setLayoutManager(new LinearLayoutManager(getContext(), LinearLayoutManager.HORIZONTAL, false));
+        rvMapImages.setVisibility(View.GONE);
 
         // --- Setup RecyclerView Adapters ---
         setupFriendsRecyclerView();
@@ -553,27 +563,62 @@ public class ProfileFragment extends Fragment implements OnMapReadyCallback {
         gMap.getUiSettings().setAllGesturesEnabled(false);
         gMap.getUiSettings().setZoomControlsEnabled(false);
         gMap.getUiSettings().setMapToolbarEnabled(false);
-
-        // Fetch and display map data for the 'displayUserId'
-        // This is a placeholder; you'd load actual location data associated with 'displayUserId'
-        // from Firestore and then add markers/polylines.
-        // For example, if you have a 'locations' collection with userId and LatLng:
-        // db.collection("locations").whereEqualTo("userId", displayUserId).get()...
-        LatLng defaultLocation = new LatLng(14.5995, 120.9842); // Example: Manila
-        gMap.addMarker(new MarkerOptions().position(defaultLocation).title("User's Last Known Location"));
-        gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(defaultLocation, 12f));
-
-        // If you actually fetch map data and it's not empty:
-        hasMapData = true; // Set this based on actual data
-        if (hasMapData) {
-            miniMapView.setVisibility(View.VISIBLE);
-            tvNoMapDataMessage.setVisibility(View.GONE);
-            btnFullScreenMap.setVisibility(View.VISIBLE);
-        } else {
-            miniMapView.setVisibility(View.GONE);
-            tvNoMapDataMessage.setVisibility(View.VISIBLE);
-            btnFullScreenMap.setVisibility(View.GONE);
-        }
+        // Fetch and display map data for the 'displayUserId' from Firestore 'records'
+        db.collection("records")
+            .whereEqualTo("userId", displayUserId)
+            .get()
+            .addOnSuccessListener(querySnapshot -> {
+                boolean hasAnyPath = false;
+                LatLng lastPoint = null;
+                mapImageUrls.clear();
+                for (DocumentSnapshot doc : querySnapshot.getDocuments()) {
+                    java.util.List<java.util.Map<String, Object>> pathList = (java.util.List<java.util.Map<String, Object>>) doc.get("path");
+                    String mapImageUrl = doc.getString("mapImageUrl");
+                    if (mapImageUrl != null && !mapImageUrl.isEmpty()) {
+                        mapImageUrls.add(mapImageUrl);
+                    }
+                    if (pathList != null && !pathList.isEmpty()) {
+                        hasAnyPath = true;
+                        java.util.List<LatLng> polylinePoints = new java.util.ArrayList<>();
+                        for (java.util.Map<String, Object> point : pathList) {
+                            double lat = (double) point.get("lat");
+                            double lng = (double) point.get("lng");
+                            LatLng latLng = new LatLng(lat, lng);
+                            polylinePoints.add(latLng);
+                        }
+                        // Draw polyline
+                        gMap.addPolyline(new PolylineOptions().addAll(polylinePoints).color(0xFF1976D2).width(8f));
+                        // Add marker at end of path
+                        if (!polylinePoints.isEmpty()) {
+                            lastPoint = polylinePoints.get(polylinePoints.size() - 1);
+                            gMap.addMarker(new MarkerOptions().position(lastPoint).icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE)));
+                        }
+                    }
+                }
+                mapImageAdapter.notifyDataSetChanged();
+                if (!mapImageUrls.isEmpty()) {
+                    rvMapImages.setVisibility(View.VISIBLE);
+                } else {
+                    rvMapImages.setVisibility(View.GONE);
+                }
+                if (hasAnyPath && lastPoint != null) {
+                    gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(lastPoint, 14f));
+                    miniMapView.setVisibility(View.VISIBLE);
+                    tvNoMapDataMessage.setVisibility(View.GONE);
+                    btnFullScreenMap.setVisibility(View.VISIBLE);
+                } else {
+                    // No map data
+                    LatLng defaultLocation = new LatLng(14.5995, 120.9842); // Manila
+                    gMap.addMarker(new MarkerOptions().position(defaultLocation).title("User's Last Known Location"));
+                    gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(defaultLocation, 12f));
+                    miniMapView.setVisibility(View.GONE);
+                    tvNoMapDataMessage.setVisibility(View.VISIBLE);
+                    btnFullScreenMap.setVisibility(View.GONE);
+                }
+            })
+            .addOnFailureListener(e -> {
+                Toast.makeText(getContext(), "Failed to load map data: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            });
         // Optional: Apply map style (e.g., from R.raw.map_style_black_accents)
     }
 
@@ -618,6 +663,10 @@ public class ProfileFragment extends Fragment implements OnMapReadyCallback {
     @Override
     public void onResume() {
         super.onResume();
+        // Ensure callback is always set when fragment is resumed
+        if (getActivity() instanceof ProfileFragmentCallback) {
+            callback = (ProfileFragmentCallback) getActivity();
+        }
         if (miniMapView != null) miniMapView.onResume();
     }
 

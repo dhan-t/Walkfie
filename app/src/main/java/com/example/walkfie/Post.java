@@ -20,6 +20,8 @@ public class Post implements Serializable {
     private List<String> likedBy; // New field for tracking user IDs who liked the post
     private String text;
     private String profilePicUrl;
+    private boolean edited;
+    private com.google.firebase.Timestamp editedAt;
 
     public Post() {
         // Required public no-argument constructor for Firestore deserialization
@@ -38,7 +40,7 @@ public class Post implements Serializable {
     }
 
     // Full constructor (useful for testing or if you need to manually construct with all fields)
-    public Post(String id, String userId, String username, String userProfilePicUrl, String mediaUrl, String caption, Timestamp timestamp, long likesCount, long commentsCount, List<String> likedBy, String text, String profilePicUrl) {
+    public Post(String id, String userId, String username, String userProfilePicUrl, String mediaUrl, String caption, Timestamp timestamp, long likesCount, long commentsCount, List<String> likedBy, String text, String profilePicUrl, boolean edited, com.google.firebase.Timestamp editedAt) {
         this.id = id;
         this.userId = userId;
         this.username = username;
@@ -51,6 +53,8 @@ public class Post implements Serializable {
         this.likedBy = likedBy;
         this.text = text;
         this.profilePicUrl = profilePicUrl;
+        this.edited = edited;
+        this.editedAt = editedAt;
     }
 
 
@@ -63,6 +67,8 @@ public class Post implements Serializable {
     public String getCaption() { return caption; }
     public String getText() { return text; }
     public String getProfilePicUrl() { return profilePicUrl; }
+    public boolean getEdited() { return edited; }
+    public com.google.firebase.Timestamp getEditedAt() { return editedAt; }
 
     // Removed @ServerTimestamp from getter as it's primarily for writing to Firestore
     public Date getTimestamp() { return timestamp.toDate(); }
@@ -83,6 +89,8 @@ public class Post implements Serializable {
     public void setLikedBy(List<String> likedBy) { this.likedBy = likedBy; } // New setter for likedBy
     public void setText(String text) { this.text = text; }
     public void setProfilePicUrl(String profilePicUrl) { this.profilePicUrl = profilePicUrl; }
+    public void setEdited(boolean edited) { this.edited = edited; }
+    public void setEditedAt(com.google.firebase.Timestamp editedAt) { this.editedAt = editedAt; }
 
     // You might want to add a convenience method to get java.util.Date if needed elsewhere
     public java.util.Date getTimestampAsDate() {

@@ -182,6 +182,9 @@ public class HomeFragment extends Fragment implements PostAdapter.OnPostInteract
             showCreateTextContentDialog(false);
         });
         dialog.show();
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+        }
     }
 
     @Override
@@ -625,7 +628,124 @@ public class HomeFragment extends Fragment implements PostAdapter.OnPostInteract
 
     @Override
     public void onPostOptionsClick(Post post) {
-        Toast.makeText(getContext(), "Clicked options for post: " + post.getId(), Toast.LENGTH_SHORT).show();
+        FirebaseUser currentUser = mAuth.getCurrentUser();
+        boolean isOwnPost = currentUser != null && post.getUserId() != null && post.getUserId().equals(currentUser.getUid());
+        if (isOwnPost) {
+            LayoutInflater inflater = LayoutInflater.from(getContext());
+            View dialogView = inflater.inflate(R.layout.dialog_post_options, null);
+            androidx.appcompat.widget.AppCompatButton btnEdit = dialogView.findViewById(R.id.btnEditPost);
+            androidx.appcompat.widget.AppCompatButton btnDelete = dialogView.findViewById(R.id.btnDeletePost);
+            AlertDialog dialog = new AlertDialog.Builder(getContext())
+                    .setView(dialogView)
+                    .create();
+            btnEdit.setOnClickListener(v -> {
+                dialog.dismiss();
+                showEditPostDialog(post);
+            });
+            btnDelete.setOnClickListener(v -> {
+                dialog.dismiss();
+                deletePost(post);
+            });
+            dialog.show();
+            if (dialog.getWindow() != null) {
+                dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+            }
+        } else {
+            // For other users' posts: show report/hide only
+            List<String> options = new ArrayList<>();
+            options.add("Report Post");
+            options.add("Hide Post");
+            options.add("View Profile");
+            CharSequence[] items = options.toArray(new CharSequence[0]);
+            AlertDialog.Builder builder = new AlertDialog.Builder(getContext());
+            builder.setTitle("Post Options");
+            builder.setItems(items, (dialog, which) -> {
+                String selected = options.get(which);
+                switch (selected) {
+                    case "Report Post":
+                        Toast.makeText(getContext(), "Report Post (not implemented)", Toast.LENGTH_SHORT).show();
+                        break;
+                    case "Hide Post":
+                        Toast.makeText(getContext(), "Hide Post (not implemented)", Toast.LENGTH_SHORT).show();
+                        break;
+                    case "View Profile":
+                        if (callback != null && post.getUserId() != null) {
+                            callback.navigateToProfileFromHome(post.getUserId());
+                        } else {
+                            Toast.makeText(getContext(), "User not found.", Toast.LENGTH_SHORT).show();
+                        }
+                        break;
+                }
+            });
+            AlertDialog dialog = builder.create();
+            dialog.show();
+        }
+    }
+
+    private void showEditPostDialog(Post post) {
+        LayoutInflater inflater = LayoutInflater.from(getContext());
+        View dialogView = inflater.inflate(R.layout.dialog_edit_post, null);
+        EditText etTextContent = dialogView.findViewById(R.id.etEditTextContent);
+        androidx.appcompat.widget.AppCompatButton btnSave = dialogView.findViewById(R.id.btnSaveEditPost);
+        TextView tvTitle = dialogView.findViewById(R.id.tvEditPostTitle);
+        // Pre-fill with current text/caption
+        if (post.getText() != null && !post.getText().isEmpty()) {
+            etTextContent.setText(post.getText());
+        } else if (post.getCaption() != null && !post.getCaption().isEmpty()) {
+            etTextContent.setText(post.getCaption());
+        }
+        AlertDialog dialog = new AlertDialog.Builder(getContext())
+                .setView(dialogView)
+                .create();
+        btnSave.setOnClickListener(v -> {
+            String newText = etTextContent.getText().toString().trim();
+            if (newText.isEmpty()) {
+                etTextContent.setError("Please enter some text");
+                return;
+            }
+            dialog.dismiss();
+            updatePostText(post, newText);
+        });
+        dialog.show();
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+        }
+    }
+
+    private void updatePostText(Post post, String newText) {
+        if (post.getId() == null) {
+            Toast.makeText(getContext(), "Error: Post ID is null.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        java.util.Map<String, Object> updates = new java.util.HashMap<>();
+        updates.put("text", newText);
+        updates.put("edited", true);
+        updates.put("editedAt", com.google.firebase.Timestamp.now());
+        db.collection("posts").document(post.getId())
+            .update(updates)
+            .addOnSuccessListener(aVoid -> {
+                Toast.makeText(getContext(), "Post updated!", Toast.LENGTH_SHORT).show();
+                refreshPosts();
+            })
+            .addOnFailureListener(e -> {
+                Toast.makeText(getContext(), "Failed to update post: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            });
+    }
+
+    private void deletePost(Post post) {
+        if (post.getId() == null) {
+            Toast.makeText(getContext(), "Error: Post ID is null.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        db.collection("posts").document(post.getId())
+            .delete()
+            .addOnSuccessListener(aVoid -> {
+                Toast.makeText(getContext(), "Post deleted!", Toast.LENGTH_SHORT).show();
+                refreshPosts();
+            })
+            .addOnFailureListener(e -> {
+                Toast.makeText(getContext(), "Failed to delete post: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            });
     }
 
     // --- StoryAdapter.OnStoryClickListener Implementations ---
@@ -699,6 +819,9 @@ public class HomeFragment extends Fragment implements PostAdapter.OnPostInteract
             }
         });
         dialog.show();
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+        }
     }
 
     private void createTextOnlyPost(String text) {
