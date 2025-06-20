@@ -5,6 +5,7 @@ import android.content.pm.PackageManager;
 import android.location.Location;
 import android.os.Bundle;
 import android.os.Handler;
+import android.widget.ImageView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -33,6 +34,10 @@ import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 
+interface MapFragmentCallback {
+    void navigateToProfile();
+}
+
 public class MapFragment extends Fragment implements OnMapReadyCallback {
 
     private MapView mapView;
@@ -51,6 +56,11 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
     private boolean isFollowingUser = true;
     private boolean isRecording = false;
     private Location lastKnownLocation;
+    private MapFragmentCallback callback;
+
+    public void setMapFragmentCallback(MapFragmentCallback callback) {
+        this.callback = callback;
+    }
 
     public MapFragment() {
         // Required empty constructor
@@ -73,6 +83,20 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
 
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(requireActivity());
 
+        ImageView ivProfileIcon = view.findViewById(R.id.ivProfileIcon);
+        ivProfileIcon.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                // *** MODIFIED CODE HERE ***
+                if (callback != null) {
+                    callback.navigateToProfile(); // Call the callback method
+                } else {
+                    // This toast helps if the callback isn't set, which means HomeActivity didn't call setMapFragmentCallback()
+                    Toast.makeText(getContext(), "Error: Navigation callback not set!", Toast.LENGTH_SHORT).show();
+                }
+            }
+        });
+
         return view;
     }
 
@@ -81,7 +105,7 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
         gMap = googleMap;
 
         gMap.getUiSettings().setZoomControlsEnabled(false);
-        gMap.getUiSettings().setMyLocationButtonEnabled(true);
+        gMap.getUiSettings().setMyLocationButtonEnabled(false);
 
         gMap.setOnCameraMoveListener(() -> {
             isFollowingUser = false;

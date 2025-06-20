@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="80dp"
+    android:layout_height="wrap_content"
+    android:layout_marginStart="4dp"
+    android:layout_marginEnd="4dp"
+    android:clickable="true"
+    android:focusable="true"
+    android:background="?attr/selectableItemBackgroundBorderless">
+
+    <ImageView
+        android:id="@+id/ivStoryProfilePic"
+        android:layout_width="72dp"
+        android:layout_height="72dp"
+        android:src="@drawable/ic_default_profile_placeholder"
+        android:scaleType="centerCrop"
+        android:background="@drawable/circle_add_story_border" android:padding="3dp"
+        android:contentDescription="User story profile picture"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <ImageView
+        android:id="@+id/ivAddStoryButton"
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:src="@drawable/ic_add_white_24dp" android:background="@drawable/circle_add_icon_background" android:contentDescription="Add to story"
+        android:padding="4dp" app:layout_constraintEnd_toEndOf="@id/ivStoryProfilePic"
+        app:layout_constraintBottom_toBottomOf="@id/ivStoryProfilePic"
+        app:layout_constraintCircle="@id/ivStoryProfilePic"
+        app:layout_constraintCircleRadius="36dp" app:layout_constraintCircleAngle="135" /> <TextView
+    android:id="@+id/tvStoryUsername"
+    android:layout_width="0dp"
+    android:layout_height="wrap_content"
+    android:layout_marginTop="4dp"
+    android:gravity="center_horizontal"
+    android:maxLines="1"
+    android:ellipsize="end"
+    android:textColor="@android:color/black"
+    android:textSize="12sp"
+    app:layout_constraintTop_toBottomOf="@id/ivStoryProfilePic"
+    app:layout_constraintStart_toStartOf="parent"
+    app:layout_constraintEnd_toEndOf="parent"
+    tools:text="Your Story" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

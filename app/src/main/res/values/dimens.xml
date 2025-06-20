@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <dimen name="story_border_thickness_active">3dp</dimen>
+    <dimen name="story_border_thickness_inactive">1dp</dimen>
+</resources>

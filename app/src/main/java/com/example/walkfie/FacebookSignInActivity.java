@@ -1,5 +1,7 @@
 package com.example.walkfie;
 
+import static java.security.AccessController.getContext;
+
 import android.content.Intent;
 import android.os.Bundle;
 import android.view.View;
@@ -19,7 +21,9 @@ import com.facebook.login.LoginResult;
 import com.google.firebase.auth.FacebookAuthProvider;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.AuthCredential;
+import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.firestore.FirebaseFirestore;
 
 import java.util.Arrays;
 
@@ -102,15 +106,40 @@ public class FacebookSignInActivity extends AppCompatActivity {
     }
 
     private void saveUserToDatabase() {
-        var user = firebaseAuth.getCurrentUser();
+        FirebaseUser user = firebaseAuth.getCurrentUser(); // Use FirebaseUser, not var
         if (user != null) {
             String uid = user.getUid();
-            User profile = new User(
-                    user.getDisplayName(),
-                    "", // Facebook API sometimes doesn't split first/last names easily
-                    user.getEmail()
+            String username = user.getDisplayName() != null ? user.getDisplayName() : "New User"; // Handle null display name
+            String firstName = user.getDisplayName() != null ? user.getDisplayName() : ""; // Handle null first name
+            String lastName = user.getDisplayName() != null ? user.getDisplayName() : ""; // Handle null last name
+            String email = user.getEmail() != null ? user.getEmail() : ""; // Handle null email
+            String profilePicUrl = user.getPhotoUrl() != null ? user.getPhotoUrl().toString() : ""; // Get photo URL from FirebaseUser
+
+            // Use the full 5-argument constructor
+            User newUser = new User(
+                    uid,
+                    firstName,
+                    lastName,
+                    username,
+                    "", // Empty bio initially
+                    profilePicUrl,
+                    email
             );
-            FirebaseDatabase.getInstance().getReference("Users").child(uid).setValue(profile);
+
+            // IMPORTANT: Use FirebaseFirestore, not FirebaseDatabase.getInstance().getReference("Users")
+            // Your Firestore setup expects db.collection("users").document(uid).set(userObject)
+            Object profile = new Object();
+            FirebaseFirestore.getInstance().collection("users").document(uid)
+                    .set(profile)
+                    .addOnSuccessListener(aVoid -> {
+                        // Use FacebookSignInActivity.this or this as the Context
+                        Toast.makeText(FacebookSignInActivity.this, "User profile saved to Firestore!", Toast.LENGTH_SHORT).show();
+                        // You might want to navigate to Home/Profile Fragment here
+                    })
+                    .addOnFailureListener(e -> {
+                        // Use FacebookSignInActivity.this or this as the Context
+                        Toast.makeText(FacebookSignInActivity.this, "Error saving user profile: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                    });
         }
     }
 

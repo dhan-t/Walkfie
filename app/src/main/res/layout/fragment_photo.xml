@@ -1,16 +1,110 @@
 <?xml version="1.0" encoding="utf-8"?>
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:gravity="center"
-    android:background="@android:color/white"
-    android:padding="24dp">
+    android:background="@android:color/white">
+
+    <androidx.camera.view.PreviewView
+        android:id="@+id/viewFinder"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
 
     <TextView
-        android:text="Photo Page"
-        android:textSize="24sp"
-        android:textStyle="bold"
-        android:layout_gravity="center"
+        android:id="@+id/tvLocation"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_width="wrap_content"/>
-</FrameLayout>
+        android:layout_alignParentTop="true"
+        android:layout_alignParentStart="true"
+        android:layout_marginTop="32dp"
+        android:layout_marginStart="10dp"
+        android:textColor="@android:color/white"
+        android:textSize="16sp"
+        android:text="Fetching Location..."
+        android:shadowColor="@android:color/black"
+        android:shadowDx="1"
+        android:shadowDy="1"
+        android:shadowRadius="2"
+        tools:text="Parañaque, Metro Manila" />
+
+    <ImageButton
+        android:id="@+id/btnCapture"
+        android:layout_width="80dp"
+        android:layout_height="80dp"
+        android:layout_alignParentBottom="true"
+        android:layout_centerHorizontal="true"
+        android:layout_marginBottom="64dp"
+        android:background="@drawable/capture_button_background"
+        android:src="@drawable/ic_camera"
+        android:scaleType="centerInside"
+        android:contentDescription="Capture Photo or Video" />
+
+    <ImageButton
+        android:id="@+id/btnGallery"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_alignParentBottom="true"
+        android:layout_toStartOf="@id/btnCapture"
+        android:layout_marginEnd="40dp"
+        android:layout_marginBottom="80dp"
+        android:background="@android:color/transparent"
+        android:src="@drawable/ic_gallery" android:scaleType="fitCenter"
+        android:contentDescription="Open Gallery"
+        app:tint="@android:color/white" />
+
+
+    <HorizontalScrollView
+        android:id="@+id/hsMediaType"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_above="@id/btnCapture"
+        android:layout_centerHorizontal="true"
+        android:layout_marginBottom="16dp"
+        android:scrollbars="none"
+        android:paddingTop="4dp"
+        android:paddingBottom="4dp"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp"   >
+
+        <LinearLayout
+            android:id="@+id/llMediaType"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:id="@+id/tvStory"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:paddingVertical="8dp"
+                android:paddingHorizontal="16dp"
+                android:text="Story"
+                android:textColor="@android:color/white"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:clickable="true"
+                android:focusable="true"
+                android:background="@drawable/selected_tab_background"
+                android:layout_marginEnd="8dp" />
+
+            <TextView
+                android:id="@+id/tvPost"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:paddingVertical="8dp"
+                android:paddingHorizontal="16dp"
+                android:text="Post"
+                android:textColor="#80FFFFFF"
+                android:textSize="18sp"
+                android:textStyle="normal"
+                android:clickable="true"
+                android:focusable="true"
+                android:background="@null"
+                android:layout_marginStart="8dp" />
+
+        </LinearLayout>
+    </HorizontalScrollView>
+
+</RelativeLayout>

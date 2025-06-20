@@ -14,6 +14,8 @@ import androidx.activity.EdgeToEdge;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.firestore.FirebaseFirestore; // Import Firestore
 
 public class LoginActivity extends AppCompatActivity {
 
@@ -23,6 +25,7 @@ public class LoginActivity extends AppCompatActivity {
     TextView orText;
 
     private FirebaseAuth mAuth;
+    private FirebaseFirestore db; // Use Firestore
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -31,6 +34,7 @@ public class LoginActivity extends AppCompatActivity {
         setContentView(R.layout.activity_login);
 
         mAuth = FirebaseAuth.getInstance();
+        db = FirebaseFirestore.getInstance(); // Initialize Firestore
 
         emailInput = findViewById(R.id.emailInput);
         passwordInput = findViewById(R.id.passwordInput);
@@ -58,6 +62,11 @@ public class LoginActivity extends AppCompatActivity {
             mAuth.signInWithEmailAndPassword(inputEmail, inputPassword)
                     .addOnCompleteListener(task -> {
                         if (task.isSuccessful()) {
+                            FirebaseUser firebaseUser = mAuth.getCurrentUser();
+                            if (firebaseUser != null) {
+                                // Check if user profile exists in Firestore, if not, create it
+                                ensureUserProfileExistsInFirestore(firebaseUser);
+                            }
                             startActivity(new Intent(LoginActivity.this, WelcomeActivity.class));
                             overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left);
                             finish();
@@ -67,15 +76,51 @@ public class LoginActivity extends AppCompatActivity {
                     });
         });
 
-            googleButton.setOnClickListener(v -> {
-                startActivity(new Intent(LoginActivity.this, GoogleSignInActivity.class));
-                overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left);
-            });
+        googleButton.setOnClickListener(v -> {
+            startActivity(new Intent(LoginActivity.this, GoogleSignInActivity.class));
+            overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left);
+        });
 
-            facebookButton.setOnClickListener(v -> {
-                startActivity(new Intent(LoginActivity.this, FacebookSignInActivity.class));
-                overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left);
-            });
+        facebookButton.setOnClickListener(v -> {
+            startActivity(new Intent(LoginActivity.this, FacebookSignInActivity.class));
+            overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left);
+        });
+    }
+
+    private void ensureUserProfileExistsInFirestore(FirebaseUser firebaseUser) {
+        String uid = firebaseUser.getUid();
+        db.collection("users").document(uid).get()
+                .addOnSuccessListener(documentSnapshot -> {
+                    if (!documentSnapshot.exists()) {
+                        // User profile does not exist, create it
+                        String username = firebaseUser.getDisplayName() != null ? firebaseUser.getDisplayName() : "User";
+                        String firstName = firebaseUser.getDisplayName() != null ? firebaseUser.getDisplayName() : "";
+                        String lastName = firebaseUser.getDisplayName() != null ? firebaseUser.getDisplayName() : "";
+                        String email = firebaseUser.getEmail() != null ? firebaseUser.getEmail() : "";
+                        String profilePicUrl = firebaseUser.getPhotoUrl() != null ? firebaseUser.getPhotoUrl().toString() : "";
+
+                        User newUser = new User(
+                                uid,
+                                firstName,
+                                lastName,
+                                username,
+                                "", // Empty bio initially
+                                profilePicUrl,
+                                email
+                        );
+                        db.collection("users").document(uid).set(newUser)
+                                .addOnSuccessListener(aVoid -> {
+                                    Toast.makeText(LoginActivity.this, "User profile created (first login)!", Toast.LENGTH_SHORT).show();
+                                })
+                                .addOnFailureListener(e -> {
+                                    Toast.makeText(LoginActivity.this, "Error creating user profile (first login): " + e.getMessage(), Toast.LENGTH_LONG).show();
+                                });
+                    }
+                    // If it exists, do nothing, the ProfileFragment will load it.
+                })
+                .addOnFailureListener(e -> {
+                    Toast.makeText(LoginActivity.this, "Error checking user profile: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                });
     }
 
     private void animateStaggered(View view, long delay) {

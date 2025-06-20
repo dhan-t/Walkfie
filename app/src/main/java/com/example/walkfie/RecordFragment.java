@@ -21,6 +21,9 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.core.widget.NestedScrollView;
 import androidx.fragment.app.Fragment;
+import androidx.navigation.NavController;
+import androidx.navigation.Navigation;
+import androidx.navigation.fragment.NavHostFragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -49,6 +52,7 @@ import java.util.List;
 interface RecordFragmentCallback {
     void onRecordingStarted(String activityType);
     void onRecordingStopped();
+    void navigateToProfile();
 }
 
 public class RecordFragment extends Fragment implements OnMapReadyCallback, ActivityAdapter.OnActivityClickListener {
@@ -126,6 +130,20 @@ public class RecordFragment extends Fragment implements OnMapReadyCallback, Acti
         mapView.onCreate(mapViewBundle);
         mapView.getMapAsync(this);
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(requireActivity());
+
+        ImageView ivProfileIcon = view.findViewById(R.id.ivProfileIcon);
+        ivProfileIcon.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                // *** MODIFIED CODE HERE ***
+                if (callback != null) {
+                    callback.navigateToProfile(); // Call the callback method
+                } else {
+                    // This toast helps if the callback isn't set, which means HomeActivity didn't call setRecordFragmentCallback()
+                    Toast.makeText(getContext(), "Error: Navigation callback not set!", Toast.LENGTH_SHORT).show();
+                }
+            }
+        });
 
         // ✅ Initialize BottomSheet
         bottomSheetContent = view.findViewById(R.id.bottom_sheet);
@@ -465,7 +483,7 @@ public class RecordFragment extends Fragment implements OnMapReadyCallback, Acti
     public void onMapReady(@NonNull GoogleMap googleMap) {
         gMap = googleMap;
         gMap.getUiSettings().setZoomControlsEnabled(false);
-        gMap.getUiSettings().setMyLocationButtonEnabled(true);
+        gMap.getUiSettings().setMyLocationButtonEnabled(false);
 
         gMap.setOnCameraMoveListener(() -> {
             isFollowingUser = false;

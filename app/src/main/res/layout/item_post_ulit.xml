@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:paddingBottom="16dp"
+    android:background="@android:color/white"
+    android:layout_marginBottom="8dp">
+
+    <ImageView
+        android:id="@+id/ivPostProfilePic"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_marginStart="16dp"
+        android:layout_marginTop="16dp"
+        android:src="@drawable/ic_default_profile_placeholder"
+        android:scaleType="centerCrop"
+        android:background="@drawable/circle_background_white"
+        android:padding="1dp"
+        android:contentDescription="Post author profile picture"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
+
+    <TextView
+        android:id="@+id/tvPostUsername"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:textStyle="bold"
+        android:textColor="@android:color/black"
+        android:textSize="14sp"
+        app:layout_constraintStart_toEndOf="@id/ivPostProfilePic"
+        app:layout_constraintTop_toTopOf="@id/ivPostProfilePic"
+        app:layout_constraintBottom_toBottomOf="@id/ivPostProfilePic"
+        tools:text="username_123" />
+
+    <ImageView
+        android:id="@+id/ivPostOptions"
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:layout_marginEnd="16dp"
+        android:src="@drawable/ic_more_vert_black_24dp"
+        android:contentDescription="Post options"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="@id/ivPostProfilePic"
+        app:layout_constraintBottom_toBottomOf="@id/ivPostProfilePic" />
+
+    <ImageView
+        android:id="@+id/ivPostContent"
+        android:layout_width="match_parent"
+        android:layout_height="280dp" android:layout_marginTop="8dp"
+        android:scaleType="centerCrop"
+        android:src="@drawable/sample_story_placeholder" android:background="@android:color/darker_gray"
+        android:contentDescription="Post content image"
+        app:layout_constraintTop_toBottomOf="@id/ivPostProfilePic"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <ImageView
+        android:id="@+id/ivLike"
+        android:layout_width="28dp"
+        android:layout_height="28dp"
+        android:layout_marginStart="16dp"
+        android:layout_marginTop="12dp"
+        android:src="@drawable/ic_heart_outline_black_24dp"
+        android:contentDescription="Like post"
+        app:layout_constraintTop_toBottomOf="@id/ivPostContent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:tint="@android:color/black" /> <ImageView
+    android:id="@+id/ivComment"
+    android:layout_width="28dp"
+    android:layout_height="28dp"
+    android:layout_marginStart="12dp"
+    android:layout_marginTop="12dp"
+    android:src="@drawable/ic_comment_outline_black_24dp"
+    android:contentDescription="Comment on post"
+    app:layout_constraintTop_toBottomOf="@id/ivPostContent"
+    app:layout_constraintStart_toEndOf="@id/ivLike"
+    app:tint="@android:color/black" />
+
+    <ImageView
+        android:id="@+id/ivShare"
+        android:layout_width="28dp"
+        android:layout_height="28dp"
+        android:layout_marginStart="12dp"
+        android:layout_marginTop="12dp"
+        android:src="@drawable/ic_send_outline_black_24dp"
+        android:contentDescription="Share post"
+        app:layout_constraintTop_toBottomOf="@id/ivPostContent"
+        app:layout_constraintStart_toEndOf="@id/ivComment"
+        app:tint="@android:color/black" />
+
+    <ImageView
+        android:id="@+id/ivSave"
+        android:layout_width="28dp"
+        android:layout_height="28dp"
+        android:layout_marginEnd="16dp"
+        android:layout_marginTop="12dp"
+        android:src="@drawable/ic_bookmark_outline_black_24dp"
+        android:contentDescription="Save post"
+        app:layout_constraintTop_toBottomOf="@id/ivPostContent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:tint="@android:color/black" />
+
+    <TextView
+        android:id="@+id/tvLikesCount"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:layout_marginTop="8dp"
+        android:textColor="@android:color/black"
+        android:textSize="13sp"
+        android:textStyle="bold"
+        app:layout_constraintTop_toBottomOf="@id/ivLike"
+        app:layout_constraintStart_toStartOf="parent"
+        tools:text="1,234 likes" />
+
+    <TextView
+        android:id="@+id/tvPostDescription"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="16dp"
+        android:layout_marginTop="4dp"
+        android:textColor="@android:color/black"
+        android:textSize="14sp"
+        android:maxLines="2"
+        android:ellipsize="end"
+        app:layout_constraintTop_toBottomOf="@id/tvLikesCount"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        tools:text="This is a cool walkfie I took today in the park! #walkfie #nature #explore" />
+
+    <TextView
+        android:id="@+id/tvViewAllComments"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:layout_marginTop="4dp"
+        android:text="View all 5 comments"
+        android:textColor="@android:color/darker_gray"
+        android:textSize="13sp"
+        app:layout_constraintTop_toBottomOf="@id/tvPostDescription"
+        app:layout_constraintStart_toStartOf="parent"
+        android:clickable="true"
+        android:focusable="true"/>
+
+    <TextView
+        android:id="@+id/tvPostTime"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:layout_marginTop="4dp"
+        android:textColor="@android:color/darker_gray"
+        android:textSize="11sp"
+        app:layout_constraintTop_toBottomOf="@id/tvViewAllComments"
+        app:layout_constraintStart_toStartOf="parent"
+        tools:text="2 hours ago" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>
