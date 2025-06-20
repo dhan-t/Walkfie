@@ -18,6 +18,8 @@ import java.util.Date;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
+import de.hdodenhof.circleimageview.CircleImageView;
+
 public class PostAdapter extends RecyclerView.Adapter<PostAdapter.PostViewHolder> {
 
     private List<Post> postList; // Correctly named 'postList'
@@ -59,10 +61,14 @@ public class PostAdapter extends RecyclerView.Adapter<PostAdapter.PostViewHolder
         holder.tvPostTime.setText(getFormattedTime(post.getTimestamp()));
 
         // --- Load images using Glide ---
-        // Load Profile Picture
-        if (post.getUserProfilePicUrl() != null && !post.getUserProfilePicUrl().isEmpty()) {
+        // Load Profile Picture (always use userProfilePicUrl)
+        String profilePicUrl = post.getUserProfilePicUrl();
+        if (profilePicUrl == null || profilePicUrl.isEmpty()) {
+            profilePicUrl = post.getProfilePicUrl(); // fallback if needed
+        }
+        if (profilePicUrl != null && !profilePicUrl.isEmpty()) {
             Glide.with(holder.itemView.getContext())
-                    .load(post.getUserProfilePicUrl())
+                    .load(profilePicUrl)
                     .placeholder(R.drawable.ic_default_profile_placeholder)
                     .error(R.drawable.ic_default_profile_placeholder)
                     .into(holder.ivPostProfilePic);
@@ -70,15 +76,34 @@ public class PostAdapter extends RecyclerView.Adapter<PostAdapter.PostViewHolder
             holder.ivPostProfilePic.setImageResource(R.drawable.ic_default_profile_placeholder);
         }
 
-        // Load Post Content Image
+        // Show text body if text-only, otherwise show image
         if (post.getMediaUrl() != null && !post.getMediaUrl().isEmpty()) {
+            holder.ivPostContent.setVisibility(View.VISIBLE);
+            holder.tvPostTextBody.setVisibility(View.GONE);
             Glide.with(holder.itemView.getContext())
                     .load(post.getMediaUrl())
                     .placeholder(R.drawable.sample_story_placeholder)
-                    .error(R.drawable.ic_close) // Use a more appropriate error icon, e.g., ic_error
+                    .error(R.drawable.ic_close)
                     .into(holder.ivPostContent);
+            // Show caption or text in description
+            if (post.getCaption() != null && !post.getCaption().isEmpty()) {
+                holder.tvPostDescription.setText(post.getCaption());
+            } else if (post.getText() != null && !post.getText().isEmpty()) {
+                holder.tvPostDescription.setText(post.getText());
+            } else {
+                holder.tvPostDescription.setText("");
+            }
+        } else if (post.getText() != null && !post.getText().isEmpty()) {
+            holder.ivPostContent.setVisibility(View.GONE);
+            holder.tvPostTextBody.setVisibility(View.VISIBLE);
+            holder.tvPostTextBody.setText(post.getText());
+            holder.tvPostTextBody.bringToFront();
+            holder.tvPostDescription.setText(post.getText());
+            Log.d("PostAdapter", "Showing text-only post: " + post.getText());
         } else {
-            holder.ivPostContent.setImageResource(R.drawable.sample_story_placeholder); // Consider a dedicated post placeholder
+            holder.ivPostContent.setVisibility(View.GONE);
+            holder.tvPostTextBody.setVisibility(View.GONE);
+            holder.tvPostDescription.setText("");
         }
 
         // --- Set click listeners ---
@@ -169,9 +194,10 @@ public class PostAdapter extends RecyclerView.Adapter<PostAdapter.PostViewHolder
         }
     }
 
-    static class PostViewHolder extends RecyclerView.ViewHolder {
-        ImageView ivPostProfilePic, ivPostContent, ivLike, ivComment, ivShare, ivSave, ivPostOptions;
-        TextView tvPostUsername, tvLikesCount, tvPostDescription, tvViewAllComments, tvPostTime;
+    public static class PostViewHolder extends RecyclerView.ViewHolder {
+        CircleImageView ivPostProfilePic;
+        ImageView ivPostContent, ivLike, ivComment, ivShare, ivSave, ivPostOptions;
+        TextView tvPostUsername, tvLikesCount, tvPostDescription, tvViewAllComments, tvPostTime, tvPostTextBody;
 
         public PostViewHolder(@NonNull View itemView) {
             super(itemView);
@@ -188,6 +214,7 @@ public class PostAdapter extends RecyclerView.Adapter<PostAdapter.PostViewHolder
             tvPostDescription = itemView.findViewById(R.id.tvPostDescription);
             tvViewAllComments = itemView.findViewById(R.id.tvViewAllComments);
             tvPostTime = itemView.findViewById(R.id.tvPostTime);
+            tvPostTextBody = itemView.findViewById(R.id.tvPostTextBody);
         }
     }
 }

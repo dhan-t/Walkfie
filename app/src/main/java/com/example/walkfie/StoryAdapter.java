@@ -75,74 +75,47 @@ public class StoryAdapter extends RecyclerView.Adapter<StoryAdapter.StoryViewHol
         StoryItem storyItem = storiesData.get(position);
         holder.bind(storyItem);
 
-        // Crucial: Clear previous listeners to prevent multiple triggers when RecyclerView recycles views
-        holder.itemView.setOnClickListener(null); // Clear listener on the entire item view
+        // Clear previous listeners
+        holder.itemView.setOnClickListener(null);
         if (holder.ivAddStoryButton != null) {
             holder.ivAddStoryButton.setOnClickListener(null);
         }
-        holder.ivStoryProfilePic.setOnClickListener(null); // Clear listener on the profile pic itself
+        holder.ivStoryProfilePic.setOnClickListener(null);
 
         if (storyItem.getType() == StoryType.YOUR_STORY) {
             if (storyItem.getUserStories() == null || storyItem.getUserStories().isEmpty()) {
-                // Case 1: "Your Story" with NO stories (should lead to creation)
+                // No stories: show add icon, make whole circle and add icon clickable to add
                 holder.ivAddStoryButton.setVisibility(View.VISIBLE);
-                // Attach listener to both the overall item and the explicit add button
                 View.OnClickListener addStoryListener = v -> {
-                    if (listener != null) {
-                        listener.onUserStoryClickToAdd();
-                        Log.d(TAG, "Clicked 'Your Story' (empty) -> Add Story.");
-                    }
+                    if (listener != null) listener.onUserStoryClickToAdd();
                 };
                 holder.itemView.setOnClickListener(addStoryListener);
                 holder.ivAddStoryButton.setOnClickListener(addStoryListener);
-
+                holder.ivStoryProfilePic.setOnClickListener(addStoryListener);
                 holder.ivStoryProfilePic.setBackgroundResource(R.drawable.circle_add_story_border);
-
             } else {
-                // Case 2: "Your Story" WITH existing stories (should lead to viewing)
-                holder.ivAddStoryButton.setVisibility(View.GONE); // Hide the '+' button
+                // Has stories: hide add icon, make whole circle clickable to view
+                holder.ivAddStoryButton.setVisibility(View.GONE);
                 View.OnClickListener viewStoryListener = v -> {
-                    if (listener != null) {
-                        // Check if stories exist before passing
-                        if (!storyItem.getUserStories().isEmpty()) {
-                            listener.onStoryClick(storyItem.getUserStories(), 0); // View their own stories
-                            Log.d(TAG, "Clicked 'Your Story' (with stories) -> View Stories.");
-                        } else {
-                            // This case should ideally not happen if logic is correct, but a fallback
-                            Log.w(TAG, "Clicked 'Your Story' to view, but userStories list is unexpectedly empty.");
-                        }
+                    if (listener != null && !storyItem.getUserStories().isEmpty()) {
+                        listener.onStoryClick(storyItem.getUserStories(), 0);
                     }
                 };
                 holder.itemView.setOnClickListener(viewStoryListener);
-                // Optionally, also set on ivStoryProfilePic if you want that specific area to be clickable too
-                // holder.ivStoryProfilePic.setOnClickListener(viewStoryListener);
-
-                // Apply border for unseen/seen stories (placeholder for now)
+                holder.ivStoryProfilePic.setOnClickListener(viewStoryListener);
                 holder.ivStoryProfilePic.setBackgroundResource(R.drawable.circle_add_story_border);
             }
             holder.tvStoryUsername.setText("Your Story");
-
         } else if (storyItem.getType() == StoryType.FRIEND_STORY) {
-            // Case 3: Friend's Story (always leads to viewing)
-            if (holder.ivAddStoryButton != null) { // Ensure it's hidden for friend stories
-                holder.ivAddStoryButton.setVisibility(View.GONE);
-            }
+            if (holder.ivAddStoryButton != null) holder.ivAddStoryButton.setVisibility(View.GONE);
             holder.tvStoryUsername.setText(storyItem.getUsername());
-
             View.OnClickListener viewFriendStoryListener = v -> {
-                if (listener != null) {
-                    if (!storyItem.getUserStories().isEmpty()) {
-                        listener.onStoryClick(storyItem.getUserStories(), 0);
-                        Log.d(TAG, "Clicked '" + storyItem.getUsername() + "' story -> View Stories.");
-                    } else {
-                        Log.w(TAG, "Clicked '" + storyItem.getUsername() + "' story to view, but userStories list is unexpectedly empty.");
-                    }
+                if (listener != null && !storyItem.getUserStories().isEmpty()) {
+                    listener.onStoryClick(storyItem.getUserStories(), 0);
                 }
             };
             holder.itemView.setOnClickListener(viewFriendStoryListener);
-            // holder.ivStoryProfilePic.setOnClickListener(viewFriendStoryListener);
-
-            // Apply border for unseen/seen friend stories (placeholder for now)
+            holder.ivStoryProfilePic.setOnClickListener(viewFriendStoryListener);
             holder.ivStoryProfilePic.setBackgroundResource(R.drawable.circle_add_story_border);
         }
     }

@@ -55,19 +55,31 @@ public class StoryPageFragment extends Fragment {
 
 
         if (story != null) {
-            // Load image or video thumbnail for now (full video handling is a future step)
-            if ("image".equalsIgnoreCase(story.getMediaType())) {
-                Glide.with(this)
-                        .load(story.getMediaUrl())
-                        .placeholder(R.drawable.sample_story_placeholder)
-                        .into(ivStoryImage);
+            boolean hasMedia = story.getMediaUrl() != null && !story.getMediaUrl().isEmpty();
+            if (hasMedia) {
+                ivStoryImage.setVisibility(View.VISIBLE);
+                tvCaption.setVisibility(View.GONE);
+                // Load image or video thumbnail for now (full video handling is a future step)
+                if ("image".equalsIgnoreCase(story.getMediaType())) {
+                    Glide.with(this)
+                            .load(story.getMediaUrl())
+                            .placeholder(R.drawable.sample_story_placeholder)
+                            .into(ivStoryImage);
+                } else {
+                    // If video, you can load thumbnail (for now)
+                    Glide.with(this)
+                            .load(story.getMediaUrl())
+                            .placeholder(R.drawable.sample_story_placeholder)
+                            .into(ivStoryImage);
+                    // You can replace with a VideoView or ExoPlayer if needed
+                }
+            } else if (story.getText() != null && !story.getText().isEmpty()) {
+                ivStoryImage.setVisibility(View.GONE);
+                tvCaption.setVisibility(View.VISIBLE);
+                tvCaption.setText(story.getText());
             } else {
-                // If video, you can load thumbnail (for now)
-                Glide.with(this)
-                        .load(story.getMediaUrl())
-                        .placeholder(R.drawable.sample_story_placeholder)
-                        .into(ivStoryImage);
-                // You can replace with a VideoView or ExoPlayer if needed
+                ivStoryImage.setVisibility(View.GONE);
+                tvCaption.setVisibility(View.GONE);
             }
 
             Glide.with(this)
@@ -76,7 +88,6 @@ public class StoryPageFragment extends Fragment {
                     .into(ivUserProfilePic);
 
             tvUsername.setText(story.getUsername());
-            tvCaption.setText(story.getCaption());
 
             if (story.getTimestamp() != null) {
                 CharSequence relativeTime = DateUtils.getRelativeTimeSpanString(

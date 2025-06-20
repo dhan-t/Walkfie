@@ -12,18 +12,22 @@ import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Button;
+import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import com.bumptech.glide.request.RequestOptions;
+import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.ListenerRegistration;
 import com.google.firebase.firestore.Query;
+import com.google.firebase.firestore.QueryDocumentSnapshot;
 import com.bumptech.glide.Glide;
 
 import java.util.ArrayList;
@@ -33,6 +37,7 @@ import java.util.List;
 
 import android.os.Handler; // Import Handler
 import android.os.Looper; // Import Looper
+import android.app.AlertDialog;
 
 public class HomeFragment extends Fragment implements PostAdapter.OnPostInteractionListener, StoryAdapter.OnStoryClickListener {
 
@@ -60,7 +65,6 @@ public class HomeFragment extends Fragment implements PostAdapter.OnPostInteract
     private RecyclerView rvStories;
     private RecyclerView rvPosts;
     private ProgressBar postsProgressBar; // Declared
-    private ImageView ivNewPost; // For the '+' icon to create a post
     private ImageView ivProfileIcon; // For the user's own profile icon in the toolbar
     private TextView tvHomeTitle; // The "Home" title text
     private TextView tvNoPostsMessage; // Added to show when no posts are available
@@ -82,6 +86,8 @@ public class HomeFragment extends Fragment implements PostAdapter.OnPostInteract
 
     // Handler for delayed UI updates (for demonstration purposes)
     private final Handler handler = new Handler(Looper.getMainLooper());
+
+    private FloatingActionButton fabQuickCreate;
 
     public HomeFragment() {
         // Required empty public constructor
@@ -120,12 +126,12 @@ public class HomeFragment extends Fragment implements PostAdapter.OnPostInteract
         rvStories = view.findViewById(R.id.rvStories);
         rvPosts = view.findViewById(R.id.rvPosts);
         postsProgressBar = view.findViewById(R.id.postsProgressBar); // Initialized
-        ivNewPost = view.findViewById(R.id.ivNewPost);
         ivProfileIcon = view.findViewById(R.id.ivProfileIcon);
         tvHomeTitle = view.findViewById(R.id.tvHomeTitle);
         tvNoPostsMessage = view.findViewById(R.id.tvNoPostsMessage); // Now exists in XML
+        fabQuickCreate = view.findViewById(R.id.fabQuickCreate);
 
-        // REMOVED: ivYourStoryProfilePic binding, it's no longer a direct element in HomeFragment's XML
+        // REMOVED: ivNewPost binding and related logic, as it's no longer needed
 
         // Setup Posts RecyclerView
         postAdapter = new PostAdapter(postList, this);
@@ -136,13 +142,6 @@ public class HomeFragment extends Fragment implements PostAdapter.OnPostInteract
         storyAdapter = new StoryAdapter(getContext(), storyItemList, this);
         rvStories.setLayoutManager(new LinearLayoutManager(getContext(), LinearLayoutManager.HORIZONTAL, false));
         rvStories.setAdapter(storyAdapter);
-
-        // Set listeners for toolbar buttons
-        ivNewPost.setOnClickListener(v -> {
-            if (callback != null) {
-                callback.navigateToPostCreationFromHome();
-            }
-        });
 
         // Set listener for profile icon (top right)
         ivProfileIcon.setOnClickListener(v -> {
@@ -156,13 +155,33 @@ public class HomeFragment extends Fragment implements PostAdapter.OnPostInteract
             }
         });
 
-        // REMOVED: Click listener for ivYourStoryProfilePic as it's no longer a standalone ImageView here.
-        // The StoryAdapter will handle clicks for "Your Story" item within rvStories.
+        fabQuickCreate.setOnClickListener(v -> showQuickCreateDialog());
 
         // Load current user's profile picture for *only* ivProfileIcon (top right)
         loadCurrentUserProfilePicForToolbar(); // **RENAMED** and updated
 
         return view;
+    }
+
+    private void showQuickCreateDialog() {
+        LayoutInflater inflater = LayoutInflater.from(getContext());
+        View dialogView = inflater.inflate(R.layout.dialog_quick_create, null);
+        Button btnCreatePost = dialogView.findViewById(R.id.btnCreatePost);
+        Button btnAddToStory = dialogView.findViewById(R.id.btnAddToStory);
+        AlertDialog dialog = new AlertDialog.Builder(getContext())
+                .setView(dialogView)
+                .create();
+        btnCreatePost.setOnClickListener(v -> {
+            dialog.dismiss();
+            // Show dialog for text-only post
+            showCreateTextContentDialog(true);
+        });
+        btnAddToStory.setOnClickListener(v -> {
+            dialog.dismiss();
+            // Show dialog for text-only story
+            showCreateTextContentDialog(false);
+        });
+        dialog.show();
     }
 
     @Override
@@ -357,16 +376,18 @@ public class HomeFragment extends Fragment implements PostAdapter.OnPostInteract
 
                     if (value != null) {
                         Log.d(TAG, "Received " + value.size() + " story documents from Firestore.");
+                        // Filter out stories older than 24 hours
+                        long nowMillis = System.currentTimeMillis();
+                        long twentyFourHoursMillis = 24 * 60 * 60 * 1000;
                         List<Story> allFetchedStories = new ArrayList<>();
-                        for (DocumentSnapshot doc : value.getDocuments()) {
-                            try {
-                                Story story = doc.toObject(Story.class);
-                                if (story != null) {
+                        for (QueryDocumentSnapshot doc : value) {
+                            Story story = doc.toObject(Story.class);
+                            if (story != null && story.getTimestamp() != null) {
+                                long storyMillis = story.getTimestamp().toDate().getTime();
+                                if (nowMillis - storyMillis <= twentyFourHoursMillis) {
                                     story.setId(doc.getId());
                                     allFetchedStories.add(story);
                                 }
-                            } catch (Exception e) {
-                                Log.e(TAG, "Error deserializing story document: " + doc.getId(), e);
                             }
                         }
 
@@ -484,33 +505,122 @@ public class HomeFragment extends Fragment implements PostAdapter.OnPostInteract
 
     @Override
     public void onLikeClick(Post post) {
-        Toast.makeText(getContext(), "Liked post: " + post.getId(), Toast.LENGTH_SHORT).show();
+        if (post == null || post.getId() == null) {
+            Toast.makeText(getContext(), "Error: Post ID is null.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        String currentUserId = mAuth.getCurrentUser() != null ? mAuth.getCurrentUser().getUid() : null;
+        if (currentUserId == null) {
+            Toast.makeText(getContext(), "You must be logged in to like posts.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        List<String> likedBy = post.getLikedBy();
+        if (likedBy == null) likedBy = new java.util.ArrayList<>();
+        boolean isLiked = likedBy.contains(currentUserId);
+        // Prepare Firestore update
+        com.google.firebase.firestore.DocumentReference postRef = db.collection("posts").document(post.getId());
+        if (isLiked) {
+            // Unlike: remove user from likedBy and decrement likesCount
+            likedBy.remove(currentUserId);
+            postRef.update(
+                    "likedBy", likedBy,
+                    "likesCount", Math.max(0, post.getLikesCount() - 1)
+            ).addOnSuccessListener(aVoid ->
+                    Toast.makeText(getContext(), "Unliked post!", Toast.LENGTH_SHORT).show()
+            ).addOnFailureListener(e ->
+                    Toast.makeText(getContext(), "Failed to unlike post: " + e.getMessage(), Toast.LENGTH_SHORT).show()
+            );
+        } else {
+            // Like: add user to likedBy and increment likesCount
+            likedBy.add(currentUserId);
+            postRef.update(
+                    "likedBy", likedBy,
+                    "likesCount", post.getLikesCount() + 1
+            ).addOnSuccessListener(aVoid ->
+                    Toast.makeText(getContext(), "Liked post!", Toast.LENGTH_SHORT).show()
+            ).addOnFailureListener(e ->
+                    Toast.makeText(getContext(), "Failed to like post: " + e.getMessage(), Toast.LENGTH_SHORT).show()
+            );
+        }
     }
 
     @Override
     public void onCommentClick(Post post) {
-        Toast.makeText(getContext(), "Clicked comment on post: " + post.getId(), Toast.LENGTH_SHORT).show();
-        if (callback != null) {
-            callback.openPostDetails(post);
+        if (post == null || post.getId() == null) {
+            Toast.makeText(getContext(), "Error: Post ID is null.", Toast.LENGTH_SHORT).show();
+            return;
         }
+        CommentsBottomSheetFragment.newInstance(post.getId())
+                .show(getParentFragmentManager(), "CommentsBottomSheetFragment");
     }
 
     @Override
     public void onShareClick(Post post) {
-        Toast.makeText(getContext(), "Shared post: " + post.getId(), Toast.LENGTH_SHORT).show();
+        if (post == null || post.getId() == null) {
+            Toast.makeText(getContext(), "Error: Post ID is null.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        ShareBottomSheetFragment.newInstance(post.getId(), post.getMediaUrl())
+                .show(getParentFragmentManager(), "ShareBottomSheetFragment");
     }
 
     @Override
     public void onSaveClick(Post post) {
-        Toast.makeText(getContext(), "Saved post: " + post.getId(), Toast.LENGTH_SHORT).show();
+        if (post == null || post.getId() == null) {
+            Log.d(TAG, "onSaveClick: Post or Post ID is null");
+            Toast.makeText(getContext(), "Error: Post ID is null.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        String currentUserId = mAuth.getCurrentUser() != null ? mAuth.getCurrentUser().getUid() : null;
+        if (currentUserId == null) {
+            Log.d(TAG, "onSaveClick: User not logged in");
+            Toast.makeText(getContext(), "You must be logged in to save posts.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        // Reference to the user's savedPosts array
+        com.google.firebase.firestore.DocumentReference userRef = db.collection("users").document(currentUserId);
+        userRef.get().addOnSuccessListener(documentSnapshot -> {
+            List<String> savedPosts = (documentSnapshot.contains("savedPosts") && documentSnapshot.get("savedPosts") != null)
+                ? (List<String>) documentSnapshot.get("savedPosts")
+                : new ArrayList<>();
+            Log.d(TAG, "Current savedPosts before update: " + savedPosts);
+            boolean isSaved = savedPosts.contains(post.getId());
+            if (isSaved) {
+                savedPosts.remove(post.getId());
+                Log.d(TAG, "Removing post from saved: " + post.getId());
+                userRef.update("savedPosts", savedPosts)
+                    .addOnSuccessListener(aVoid -> {
+                        Log.d(TAG, "Successfully removed post from saved. New savedPosts: " + savedPosts);
+                        Toast.makeText(getContext(), "Post removed from saved.", Toast.LENGTH_SHORT).show();
+                    })
+                    .addOnFailureListener(e -> {
+                        Log.d(TAG, "Failed to unsave post: " + e.getMessage());
+                        Toast.makeText(getContext(), "Failed to unsave post: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                    });
+            } else {
+                savedPosts.add(post.getId());
+                Log.d(TAG, "Adding post to saved: " + post.getId());
+                userRef.update("savedPosts", savedPosts)
+                    .addOnSuccessListener(aVoid -> {
+                        Log.d(TAG, "Successfully saved post. New savedPosts: " + savedPosts);
+                        Toast.makeText(getContext(), "Post saved!", Toast.LENGTH_SHORT).show();
+                    })
+                    .addOnFailureListener(e -> {
+                        Log.d(TAG, "Failed to save post: " + e.getMessage());
+                        Toast.makeText(getContext(), "Failed to save post: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                    });
+            }
+        });
     }
 
     @Override
     public void onViewCommentsClick(Post post) {
-        Toast.makeText(getContext(), "View all comments for post: " + post.getId(), Toast.LENGTH_SHORT).show();
-        if (callback != null) {
-            callback.openPostDetails(post);
+        if (post == null || post.getId() == null) {
+            Toast.makeText(getContext(), "Error: Post ID is null.", Toast.LENGTH_SHORT).show();
+            return;
         }
+        CommentsBottomSheetFragment.newInstance(post.getId())
+                .show(getParentFragmentManager(), "CommentsBottomSheetFragment");
     }
 
     @Override
@@ -562,5 +672,62 @@ public class HomeFragment extends Fragment implements PostAdapter.OnPostInteract
         if (callback != null) {
             callback.navigateToStoryCreationFromHome();
         }
+    }
+
+    private void showCreateTextContentDialog(boolean isPost) {
+        LayoutInflater inflater = LayoutInflater.from(getContext());
+        View dialogView = inflater.inflate(R.layout.dialog_create_text_content, null);
+        EditText etTextContent = dialogView.findViewById(R.id.etTextContent);
+        Button btnSubmit = dialogView.findViewById(R.id.btnSubmitTextContent);
+        TextView tvTitle = dialogView.findViewById(R.id.tvCreateTextTitle);
+        tvTitle.setText(isPost ? "Create Post" : "Add to Story");
+        btnSubmit.setText(isPost ? "Post" : "Add to Story");
+        AlertDialog dialog = new AlertDialog.Builder(getContext())
+                .setView(dialogView)
+                .create();
+        btnSubmit.setOnClickListener(v -> {
+            String text = etTextContent.getText().toString().trim();
+            if (text.isEmpty()) {
+                etTextContent.setError("Please enter some text");
+                return;
+            }
+            dialog.dismiss();
+            if (isPost) {
+                createTextOnlyPost(text);
+            } else {
+                createTextOnlyStory(text);
+            }
+        });
+        dialog.show();
+    }
+
+    private void createTextOnlyPost(String text) {
+        FirebaseUser user = mAuth.getCurrentUser();
+        if (user == null) return;
+        Post post = new Post();
+        post.setUserId(user.getUid());
+        post.setUsername(user.getDisplayName() != null ? user.getDisplayName() : "");
+        post.setProfilePicUrl(user.getPhotoUrl() != null ? user.getPhotoUrl().toString() : "");
+        post.setText(text);
+        post.setTimestamp(new com.google.firebase.Timestamp(new java.util.Date()));
+        // No mediaUrl for text-only
+        db.collection("posts").add(post)
+            .addOnSuccessListener(documentReference -> Toast.makeText(getContext(), "Post shared!", Toast.LENGTH_SHORT).show())
+            .addOnFailureListener(e -> Toast.makeText(getContext(), "Failed to share post: " + e.getMessage(), Toast.LENGTH_SHORT).show());
+    }
+
+    private void createTextOnlyStory(String text) {
+        FirebaseUser user = mAuth.getCurrentUser();
+        if (user == null) return;
+        Story story = new Story();
+        story.setUserId(user.getUid());
+        story.setUsername(user.getDisplayName() != null ? user.getDisplayName() : "");
+        story.setUserProfilePicUrl(user.getPhotoUrl() != null ? user.getPhotoUrl().toString() : "");
+        story.setText(text);
+        story.setTimestamp(new com.google.firebase.Timestamp(new java.util.Date()));
+        // No mediaUrl for text-only
+        db.collection("stories").add(story)
+            .addOnSuccessListener(documentReference -> Toast.makeText(getContext(), "Story added!", Toast.LENGTH_SHORT).show())
+            .addOnFailureListener(e -> Toast.makeText(getContext(), "Failed to add story: " + e.getMessage(), Toast.LENGTH_SHORT).show());
     }
 }

@@ -5,6 +5,7 @@ import com.google.firebase.Timestamp; // Changed from java.util.Date
 import java.io.Serializable;
 // Removed java.util.Date import as it's no longer directly used for the timestamp field
 import java.util.Date;
+import java.util.List;
 
 public class Post implements Serializable {
     private String id;
@@ -16,6 +17,9 @@ public class Post implements Serializable {
     private Timestamp timestamp; // Changed to com.google.firebase.Timestamp
     private long likesCount;
     private long commentsCount;
+    private List<String> likedBy; // New field for tracking user IDs who liked the post
+    private String text;
+    private String profilePicUrl;
 
     public Post() {
         // Required public no-argument constructor for Firestore deserialization
@@ -34,7 +38,7 @@ public class Post implements Serializable {
     }
 
     // Full constructor (useful for testing or if you need to manually construct with all fields)
-    public Post(String id, String userId, String username, String userProfilePicUrl, String mediaUrl, String caption, Timestamp timestamp, long likesCount, long commentsCount) {
+    public Post(String id, String userId, String username, String userProfilePicUrl, String mediaUrl, String caption, Timestamp timestamp, long likesCount, long commentsCount, List<String> likedBy, String text, String profilePicUrl) {
         this.id = id;
         this.userId = userId;
         this.username = username;
@@ -44,6 +48,9 @@ public class Post implements Serializable {
         this.timestamp = timestamp;
         this.likesCount = likesCount;
         this.commentsCount = commentsCount;
+        this.likedBy = likedBy;
+        this.text = text;
+        this.profilePicUrl = profilePicUrl;
     }
 
 
@@ -54,11 +61,14 @@ public class Post implements Serializable {
     public String getUserProfilePicUrl() { return userProfilePicUrl; }
     public String getMediaUrl() { return mediaUrl; }
     public String getCaption() { return caption; }
+    public String getText() { return text; }
+    public String getProfilePicUrl() { return profilePicUrl; }
 
     // Removed @ServerTimestamp from getter as it's primarily for writing to Firestore
     public Date getTimestamp() { return timestamp.toDate(); }
     public long getLikesCount() { return likesCount; }
     public long getCommentsCount() { return commentsCount; }
+    public List<String> getLikedBy() { return likedBy; } // New getter for likedBy
 
     // --- Setters ---
     public void setId(String id) { this.id = id; }
@@ -70,6 +80,9 @@ public class Post implements Serializable {
     public void setTimestamp(Timestamp timestamp) { this.timestamp = timestamp; } // Changed parameter type
     public void setLikesCount(long likesCount) { this.likesCount = likesCount; }
     public void setCommentsCount(long commentsCount) { this.commentsCount = commentsCount; }
+    public void setLikedBy(List<String> likedBy) { this.likedBy = likedBy; } // New setter for likedBy
+    public void setText(String text) { this.text = text; }
+    public void setProfilePicUrl(String profilePicUrl) { this.profilePicUrl = profilePicUrl; }
 
     // You might want to add a convenience method to get java.util.Date if needed elsewhere
     public java.util.Date getTimestampAsDate() {

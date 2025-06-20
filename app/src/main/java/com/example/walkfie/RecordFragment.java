@@ -99,7 +99,7 @@ public class RecordFragment extends Fragment implements OnMapReadyCallback, Acti
     }
 
     public RecordFragment() {
-    // Required empty public constructor
+        // Required empty public constructor
 
     }
 
@@ -158,13 +158,13 @@ public class RecordFragment extends Fragment implements OnMapReadyCallback, Acti
 
             @Override
             public void onStateChanged(@NonNull View bottomSheet, int newState) {
-            // Optional: Lock states if needed
+                // Optional: Lock states if needed
 
             }
 
             @Override
             public void onSlide(@NonNull View bottomSheet, float slideOffset) {
-            // Optional: No-op
+                // Optional: No-op
 
             }
         });
@@ -214,17 +214,17 @@ public class RecordFragment extends Fragment implements OnMapReadyCallback, Acti
                     @Override
                     public void onSnapshotReady(@Nullable android.graphics.Bitmap bitmap) {
                         if (bitmap != null) {
-                        // Handle the captured bitmap
-                        // You can display it, save it, or share it.
-                        // For example, display it in a temporary ImageView:
-                        // ImageView tempImageView = new ImageView(requireContext());
-                        // tempImageView.setImageBitmap(bitmap);
-                        // You could show this in a dialog.
+                            // Handle the captured bitmap
+                            // You can display it, save it, or share it.
+                            // For example, display it in a temporary ImageView:
+                            // ImageView tempImageView = new ImageView(requireContext());
+                            // tempImageView.setImageBitmap(bitmap);
+                            // You could show this in a dialog.
 
                             Toast.makeText(requireContext(), "Map snapshot captured", Toast.LENGTH_SHORT).show();
-                        // Example: You could pass this bitmap to a dialog fragment
-                        // CapturePhotoDialogFragment dialogFragment = CapturePhotoDialogFragment.newInstance(bitmap);
-                        // dialogFragment.show(getChildFragmentManager(), "capturePhoto");
+                            // Example: You could pass this bitmap to a dialog fragment
+                            // CapturePhotoDialogFragment dialogFragment = CapturePhotoDialogFragment.newInstance(bitmap);
+                            // dialogFragment.show(getChildFragmentManager(), "capturePhoto");
 
                         } else {
                             Toast.makeText(requireContext(), "Failed to capture map snapshot", Toast.LENGTH_SHORT).show();
@@ -237,8 +237,8 @@ public class RecordFragment extends Fragment implements OnMapReadyCallback, Acti
         });
 
         btnStop.setOnClickListener(v -> {
-        // End recording session, hide layout or move to summary
-        // layoutRecordingInfo.setVisibility(View.GONE);
+            // End recording session, hide layout or move to summary
+            // layoutRecordingInfo.setVisibility(View.GONE);
             stopRecording();
             hideBottomSheet();
         });
@@ -259,6 +259,23 @@ public class RecordFragment extends Fragment implements OnMapReadyCallback, Acti
         // recyclerView.setVisibility(View.VISIBLE);
 
         return view;
+    }
+
+    @Override
+    public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
+        super.onViewCreated(view, savedInstanceState);
+        // Force activityChooserSheet and its content to be visible and fully expanded
+        if (activityChooserSheet != null) {
+            activityChooserSheet.setVisibility(View.VISIBLE);
+            activityChooserSheet.setAlpha(1f);
+        }
+        if (bottomSheetContent != null) {
+            bottomSheetContent.setVisibility(View.VISIBLE);
+            bottomSheetContent.setAlpha(1f);
+        }
+        if (activityChooserBehavior != null) {
+            activityChooserBehavior.setState(BottomSheetBehavior.STATE_EXPANDED);
+        }
     }
 
     private void showBottomSheet() {
@@ -422,9 +439,9 @@ public class RecordFragment extends Fragment implements OnMapReadyCallback, Acti
                         // Ensure the bottom sheet is in a state where the icons are visible
                         if (activityChooserBehavior != null) {
                             activityChooserBehavior.setState(BottomSheetBehavior.STATE_COLLAPSED);
-                        // Optionally, fully expand it if that was the previous state
+                            // Optionally, fully expand it if that was the previous state
 
-                        // activityChooserBehavior.setState(BottomSheetBehavior.STATE_EXPANDED);
+                            // activityChooserBehavior.setState(BottomSheetBehavior.STATE_EXPANDED);
                         }
                     })
                     .start();
@@ -474,8 +491,8 @@ public class RecordFragment extends Fragment implements OnMapReadyCallback, Acti
 
     @Override
     public void onActivityClick(ActivityItem activity) {
-    // startRecording(activity.getName());
-    // hideBottomSheet();
+        // startRecording(activity.getName());
+        // hideBottomSheet();
         layoutRecordingInfo.setVisibility(View.VISIBLE);
     }
 
@@ -547,13 +564,13 @@ public class RecordFragment extends Fragment implements OnMapReadyCallback, Acti
                 if (location != null) {
                     LatLng latLng = new LatLng(location.getLatitude(), location.getLongitude());
 
-                // if (userMarker == null) {
-                // userMarker = gMap.addMarker(new MarkerOptions().position(latLng).title("You"));
-                // } else {
-                // userMarker.setPosition(latLng);
-                // }
+                    // if (userMarker == null) {
+                    // userMarker = gMap.addMarker(new MarkerOptions().position(latLng).title("You"));
+                    // } else {
+                    // userMarker.setPosition(latLng);
+                    // }
 
-                // Add this check for initial centering
+                    // Add this check for initial centering
                     if (isFirstLoad) {
                         centerMapOnUser(location);
                         isFirstLoad = false; // Mark as first load complete after centering

@@ -146,56 +146,6 @@ public class HomeActivity extends AppCompatActivity implements
 
         setupAnimations();
         setupNavigation();
-
-        // MODIFIED: Fragment back stack changed listener to handle bottom nav visibility
-        fragmentManager.addOnBackStackChangedListener(() -> {
-            Log.d(TAG, "Back stack changed. Count: " + fragmentManager.getBackStackEntryCount());
-            Fragment topFragment = fragmentManager.findFragmentById(R.id.fragment_container);
-
-            if (topFragment != null) {
-                currentFragment = topFragment;
-                Log.d(TAG, "Current fragment after back stack change: " + currentFragment.getClass().getSimpleName());
-            } else {
-                currentFragment = null; // Should not happen if a fragment is always in container
-                Log.d(TAG, "No fragment found in container after back stack change.");
-            }
-
-            if (fragmentManager.getBackStackEntryCount() == 0) {
-                // Back stack is empty: user navigated back to a root bottom nav fragment
-                Log.d(TAG, "Back stack is empty. Attempting to restore lastSelectedBottomNavFragment: " +
-                        (lastSelectedBottomNavFragment != null ? lastSelectedBottomNavFragment.getClass().getSimpleName() : "null"));
-
-                if (lastSelectedBottomNavFragment != null) {
-                    showBottomNavFragment(lastSelectedBottomNavFragment); // This method already calls commit
-                    // Prevent setupNavigation from acting on this programmatic selection
-                    isProgrammaticBottomNavSelection = true;
-                    for (Map.Entry<Integer, Fragment> entry : bottomNavFragmentsMap.entrySet()) {
-                        if (entry.getValue() == lastSelectedBottomNavFragment) {
-                            bottomNavigationView.setSelectedItemId(entry.getKey());
-                            Log.d(TAG, "Bottom nav item selected: " + entry.getKey() + " for fragment: " + lastSelectedBottomNavFragment.getClass().getSimpleName());
-                            break;
-                        }
-                    }
-                    isProgrammaticBottomNavSelection = false;
-                } else {
-                    Log.w(TAG, "lastSelectedBottomNavFragment is null. Defaulting to HomeFragment.");
-                    isProgrammaticBottomNavSelection = true;
-                    showBottomNavFragment(homeFragment);
-                    bottomNavigationView.setSelectedItemId(R.id.nav_home);
-                    lastSelectedBottomNavFragment = homeFragment;
-                    isProgrammaticBottomNavSelection = false;
-                }
-                // Show bottom navigation bar
-                bottomNavigationView.setVisibility(View.VISIBLE);
-
-            } else {
-                // Back stack is NOT empty: a pushed fragment (e.g., StoryViewer, EditProfile, CreatePost) is on top
-                Log.d(TAG, "Back stack is not empty. A pushed fragment is on top. Hiding bottom nav.");
-
-                // Hide the bottom navigation bar when a non-bottom-nav fragment is on top
-                bottomNavigationView.setVisibility(View.GONE);
-            }
-        });
     }
 
     private void showBottomNavFragment(Fragment fragmentToShow) {
@@ -393,7 +343,12 @@ public class HomeActivity extends AppCompatActivity implements
 
     @Override
     public void navigateToSettings() {
-        Toast.makeText(this, "Navigate to Settings Screen (Not implemented)", Toast.LENGTH_SHORT).show();
+        // Navigate to SettingsFragment instead of SavedPostsFragment
+        getSupportFragmentManager()
+            .beginTransaction()
+            .replace(R.id.fragment_container, new SettingsFragment())
+            .addToBackStack(null)
+            .commit();
     }
 
     @Override
