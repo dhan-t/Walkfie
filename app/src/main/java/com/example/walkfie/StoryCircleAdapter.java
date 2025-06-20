@@ -95,7 +95,7 @@ public class StoryCircleAdapter extends RecyclerView.Adapter<StoryCircleAdapter.
             ivStoryProfilePic = itemView.findViewById(R.id.ivStoryProfilePic);
             tvStoryUsername = itemView.findViewById(R.id.tvStoryUsername);
             if (viewType == StoryType.YOUR_STORY.ordinal()) {
-                ivAddStoryIcon = itemView.findViewById(R.id.ivAddStoryIcon);
+                ivAddStoryIcon = itemView.findViewById(R.id.ivAddStoryButton);
             }
         }
 

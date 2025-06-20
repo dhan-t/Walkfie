@@ -27,7 +27,8 @@
             android:textSize="40sp"
             android:textStyle="bold"
             android:layout_marginStart="16dp"
-            android:layout_marginTop="32dp" app:layout_constraintTop_toTopOf="parent"
+            android:layout_marginTop="32dp"
+            app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintStart_toStartOf="parent" />
 
         <ImageView
@@ -139,5 +140,16 @@
             android:textSize="16sp"/>
 
     </LinearLayout>
+
+    <ProgressBar
+        android:id="@+id/messagesProgressBar"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:visibility="gone"
+        app:layout_constraintTop_toBottomOf="@id/etSearchBar"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

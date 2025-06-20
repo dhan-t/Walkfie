@@ -1,5 +1,8 @@
 package com.example.walkfie;
 
+import static android.content.ContentValues.TAG; // Keep this import if you're using android.content.ContentValues.TAG
+
+import android.content.Context;
 import android.os.Bundle;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -15,7 +18,7 @@ import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
-import android.util.Log; // Add Log import
+import android.util.Log;
 
 import com.bumptech.glide.Glide;
 import com.google.android.gms.maps.MapView;
@@ -33,14 +36,17 @@ import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.ListenerRegistration;
 import com.google.firebase.firestore.Query;
 import com.google.firebase.firestore.QueryDocumentSnapshot;
+import com.google.firebase.Timestamp;
 
 import java.util.ArrayList;
+import java.util.Collections; // Added for sorting
+import java.util.Date;
 import java.util.List;
-import java.util.Date; // For story timestamp filtering if needed
-import com.google.firebase.Timestamp; // For story timestamp filtering if needed
 
 
 // Define a callback interface for actions in ProfileFragment
+// Your interface looks fine, assuming HomeActivity implements all these.
+// The key is that `openPostDetails` and `openStoryViewer` already accept the correct types.
 interface ProfileFragmentCallback {
     void navigateToProfileEdit();
     void navigateToSettings();
@@ -49,13 +55,15 @@ interface ProfileFragmentCallback {
     void navigateToFriendSearch();
     void navigateToStoryCreation();
     void onBackPressFromProfile();
-    void openPostDetails(PostAdapter.PostItem post);
-    // Updated signature: now passes a List<Story> and starting index
+    void openPostDetails(Post post);
     void openStoryViewer(List<Story> storiesToView, int startIndex);
     void openFriendProfile(FriendsAdapter.FriendItem friend);
 }
 
 public class ProfileFragment extends Fragment implements OnMapReadyCallback {
+
+    private static final String ARG_USER_ID = "userId"; // Constant for argument key
+    private String displayUserId; // The userId whose profile is being displayed
 
     private ImageView ivBackArrow;
     private ImageView ivSettings;
@@ -76,8 +84,8 @@ public class ProfileFragment extends Fragment implements OnMapReadyCallback {
     private RecyclerView rvStories;
     private TextView tvNoStoriesMessage;
     private Button btnAddStory;
-    private ProfileStoriesAdapter profileStoriesAdapter; // Use the new adapter
-    private List<Story> storiesList; // Change to List<Story>
+    private ProfileStoriesAdapter profileStoriesAdapter;
+    private List<Story> storiesList;
 
     // Map section
     private MapView miniMapView;
@@ -91,15 +99,15 @@ public class ProfileFragment extends Fragment implements OnMapReadyCallback {
     private TextView tvNoPostsMessage;
     private Button btnCreatePost;
     private ProfilePostsAdapter profilePostsAdapter;
-    private List<PostAdapter.PostItem> postsList;
+    private List<Post> postsList;
 
     private ProfileFragmentCallback callback;
 
     // Firebase instances
     private FirebaseAuth mAuth;
     private FirebaseFirestore db;
-    private FirebaseUser currentUser;
-    private DocumentReference userProfileRef;
+    private FirebaseUser currentLoggedInUser; // Renamed to clarify this is the currently authenticated user
+    private DocumentReference userProfileRef; // Refers to the profile of 'displayUserId'
     private CollectionReference postsCollectionRef;
     private CollectionReference storiesCollectionRef;
 
@@ -114,17 +122,36 @@ public class ProfileFragment extends Fragment implements OnMapReadyCallback {
         // Required empty public constructor
     }
 
+    /**
+     * Use this factory method to create a new instance of
+     * this fragment using the provided parameters.
+     *
+     * @param userId Parameter 1.
+     * @return A new instance of fragment ProfileFragment.
+     */
+    public static ProfileFragment newInstance(String userId) {
+        ProfileFragment fragment = new ProfileFragment();
+        Bundle args = new Bundle();
+        args.putString(ARG_USER_ID, userId);
+        fragment.setArguments(args);
+        return fragment;
+    }
+
     public void setProfileFragmentCallback(ProfileFragmentCallback callback) {
         this.callback = callback;
     }
 
     @Override
-    public void onAttach(@NonNull android.content.Context context) {
+    public void onAttach(@NonNull Context context) {
         super.onAttach(context);
         if (context instanceof ProfileFragmentCallback) {
             callback = (ProfileFragmentCallback) context;
         } else {
-            throw new RuntimeException(context.toString() + " must implement ProfileFragmentCallback");
+            // It's often better to log a warning here if the fragment can still function
+            // without the callback, or provide a default no-op implementation.
+            // If the callback is absolutely mandatory for core functionality, then throw.
+            Log.e(TAG, "Host Activity must implement ProfileFragmentCallback");
+            // throw new RuntimeException(context.toString() + " must implement ProfileFragmentCallback");
         }
     }
 
@@ -133,19 +160,36 @@ public class ProfileFragment extends Fragment implements OnMapReadyCallback {
         super.onCreate(savedInstanceState);
         mAuth = FirebaseAuth.getInstance();
         db = FirebaseFirestore.getInstance();
-        currentUser = mAuth.getCurrentUser();
+        currentLoggedInUser = mAuth.getCurrentUser(); // This is the user logged into the app
 
-        if (currentUser != null) {
-            userProfileRef = db.collection("users").document(currentUser.getUid());
-            postsCollectionRef = db.collection("posts");
-            storiesCollectionRef = db.collection("stories");
+        // Retrieve the userId from arguments, default to currentLoggedInUser's UID if not provided
+        if (getArguments() != null) {
+            displayUserId = getArguments().getString(ARG_USER_ID);
+        }
+
+        // If no userId was passed in arguments, or if currentLoggedInUser is null (not logged in)
+        // AND no userId was explicitly set, then we might have a problem.
+        // For now, if displayUserId is null, we assume it's for the currently logged-in user.
+        if (displayUserId == null && currentLoggedInUser != null) {
+            displayUserId = currentLoggedInUser.getUid();
+            Log.d(TAG, "ProfileFragment: No userId argument provided, displaying current user's profile: " + displayUserId);
+        } else if (displayUserId != null) {
+            Log.d(TAG, "ProfileFragment: Displaying profile for userId from arguments: " + displayUserId);
         } else {
-            Toast.makeText(getContext(), "User not logged in!", Toast.LENGTH_LONG).show();
-            // Consider navigating to login/onboarding here
+            Log.e(TAG, "ProfileFragment: No user ID available for display. User not logged in and no argument provided.");
+            Toast.makeText(getContext(), "No user profile to display. Please log in.", Toast.LENGTH_LONG).show();
+            // You might want to navigate back or to a login screen here.
+        }
+
+        // Initialize Firestore references using displayUserId
+        if (displayUserId != null) {
+            userProfileRef = db.collection("users").document(displayUserId);
+            postsCollectionRef = db.collection("posts"); // Will query by userId later
+            storiesCollectionRef = db.collection("stories"); // Will query by userId later
         }
 
         friendsList = new ArrayList<>();
-        storiesList = new ArrayList<>(); // Now List<Story>
+        storiesList = new ArrayList<>();
         postsList = new ArrayList<>();
     }
 
@@ -154,7 +198,7 @@ public class ProfileFragment extends Fragment implements OnMapReadyCallback {
                              Bundle savedInstanceState) {
         View view = inflater.inflate(R.layout.fragment_profile, container, false);
 
-        // --- Initialize Views --- (unchanged)
+        // --- Initialize Views ---
         ivBackArrow = view.findViewById(R.id.ivBackArrow);
         ivSettings = view.findViewById(R.id.ivSettings);
         ivProfilePicture = view.findViewById(R.id.ivProfilePicture);
@@ -181,13 +225,14 @@ public class ProfileFragment extends Fragment implements OnMapReadyCallback {
 
         // --- Setup RecyclerView Adapters ---
         setupFriendsRecyclerView();
-        setupStoriesRecyclerView(); // This one changed
+        setupStoriesRecyclerView();
         setupPostsRecyclerView();
 
         // --- Initialize mini map ---
         miniMapView.onCreate(savedInstanceState);
+        miniMapView.getMapAsync(this); // Get map asynchronously
 
-        // --- Set Click Listeners --- (unchanged)
+        // --- Set Click Listeners ---
         ivBackArrow.setOnClickListener(v -> {
             if (callback != null) {
                 callback.onBackPressFromProfile();
@@ -203,6 +248,19 @@ public class ProfileFragment extends Fragment implements OnMapReadyCallback {
                 Toast.makeText(getContext(), "Settings clicked!", Toast.LENGTH_SHORT).show();
             }
         });
+
+        // Show/Hide Edit Profile, Add Story, Create Post, Add Friends buttons based on whether
+        // this is the current user's profile being viewed.
+        boolean isCurrentUserProfile = (currentLoggedInUser != null && currentLoggedInUser.getUid().equals(displayUserId));
+        btnEditProfile.setVisibility(isCurrentUserProfile ? View.VISIBLE : View.GONE);
+        btnAddStory.setVisibility(isCurrentUserProfile ? View.VISIBLE : View.GONE);
+        btnCreatePost.setVisibility(isCurrentUserProfile ? View.VISIBLE : View.GONE);
+        btnAddFriends.setVisibility(isCurrentUserProfile ? View.VISIBLE : View.GONE); // For current user, this might be "Find Friends"
+
+        // For other users, btnAddFriends might be "Add Friend" or "Message".
+        // You'll need separate logic if the button text/action changes for other users.
+        // For now, it's hidden if not current user.
+
 
         btnEditProfile.setOnClickListener(v -> {
             if (callback != null) {
@@ -250,10 +308,12 @@ public class ProfileFragment extends Fragment implements OnMapReadyCallback {
     @Override
     public void onStart() {
         super.onStart();
-        if (currentUser != null) {
+        // Only attempt to fetch data if we have a valid userId to display
+        if (displayUserId != null) {
             listenForUserProfile();
             listenForUserPosts();
             listenForUserStories();
+            listenForFriends(); // Call new method to listen for friends
         }
         if (miniMapView != null) miniMapView.onStart();
     }
@@ -269,12 +329,20 @@ public class ProfileFragment extends Fragment implements OnMapReadyCallback {
         if (miniMapView != null) miniMapView.onStop();
     }
 
+    /**
+     * Loads the profile data for the `displayUserId`.
+     * This method is now generalized to load any user's profile.
+     */
     private void listenForUserProfile() {
-        if (userProfileRef == null) return;
+        if (displayUserId == null) {
+            Log.e(TAG, "listenForUserProfile: displayUserId is null, cannot fetch profile.");
+            return;
+        }
+        userProfileRef = db.collection("users").document(displayUserId); // Ensure this ref points to the correct user
 
         userProfileListener = userProfileRef.addSnapshotListener((snapshot, e) -> {
             if (e != null) {
-                Log.e("ProfileFragment", "Error fetching profile: " + e.getMessage(), e); // Use Log for debugging
+                Log.e(TAG, "Error fetching profile for user " + displayUserId + ": " + e.getMessage(), e);
                 Toast.makeText(getContext(), "Error fetching profile: " + e.getMessage(), Toast.LENGTH_LONG).show();
                 return;
             }
@@ -302,38 +370,47 @@ public class ProfileFragment extends Fragment implements OnMapReadyCallback {
                     tvUserDescription.setTextColor(getResources().getColor(android.R.color.black));
                 }
             } else {
-                tvUserName.setText("Complete Your Profile");
-                tvUserDescription.setText("Add a description to tell others about yourself.");
+                Log.w(TAG, "Profile data for user " + displayUserId + " not found or empty.");
+                tvUserName.setText("Profile Not Found");
+                tvUserDescription.setText("This user's profile data could not be loaded.");
                 ivProfilePicture.setImageResource(R.drawable.ic_default_profile_placeholder);
                 tvUserName.setTextColor(getResources().getColor(android.R.color.darker_gray));
                 tvUserDescription.setTextColor(getResources().getColor(android.R.color.darker_gray));
-                Toast.makeText(getContext(), "Please complete your profile!", Toast.LENGTH_SHORT).show();
+                Toast.makeText(getContext(), "Profile data not found!", Toast.LENGTH_SHORT).show();
             }
         });
     }
 
+    /**
+     * Fetches and displays posts for the `displayUserId`.
+     */
     private void listenForUserPosts() {
-        if (currentUser == null) return;
+        if (displayUserId == null) {
+            Log.e(TAG, "listenForUserPosts: displayUserId is null, cannot fetch posts.");
+            return;
+        }
 
         userPostsListener = postsCollectionRef
-                .whereEqualTo("userId", currentUser.getUid())
+                .whereEqualTo("userId", displayUserId) // Query for posts of the displayed user
                 .orderBy("timestamp", Query.Direction.DESCENDING)
                 .addSnapshotListener((snapshots, e) -> {
                     if (e != null) {
-                        Log.e("ProfileFragment", "Error listening for user posts: " + e.getMessage(), e);
+                        Log.e(TAG, "Error listening for user posts: " + e.getMessage(), e);
                         Toast.makeText(getContext(), "Error loading posts: " + e.getMessage(), Toast.LENGTH_LONG).show();
                         return;
                     }
 
                     if (snapshots != null) {
-                        List<PostAdapter.PostItem> newPosts = new ArrayList<>();
+                        List<Post> newPosts = new ArrayList<>();
                         for (QueryDocumentSnapshot doc : snapshots) {
                             try {
-                                PostAdapter.PostItem post = doc.toObject(PostAdapter.PostItem.class);
-                                post.setId(doc.getId()); // Set the Firestore document ID
-                                newPosts.add(post);
+                                Post post = doc.toObject(Post.class);
+                                if (post != null) {
+                                    post.setId(doc.getId());
+                                    newPosts.add(post);
+                                }
                             } catch (Exception parseException) {
-                                Log.e("ProfileFragment", "Error parsing post document " + doc.getId() + ": " + parseException.getMessage(), parseException);
+                                Log.e(TAG, "Error parsing post document " + doc.getId() + ": " + parseException.getMessage(), parseException);
                             }
                         }
                         postsList.clear();
@@ -343,66 +420,132 @@ public class ProfileFragment extends Fragment implements OnMapReadyCallback {
                         if (postsList.isEmpty()) {
                             rvPosts.setVisibility(View.GONE);
                             tvNoPostsMessage.setVisibility(View.VISIBLE);
-                            btnCreatePost.setVisibility(View.VISIBLE);
+                            btnCreatePost.setVisibility(View.GONE); // Only show for current user, handled in onCreateView now
                         } else {
                             rvPosts.setVisibility(View.VISIBLE);
                             tvNoPostsMessage.setVisibility(View.GONE);
-                            btnCreatePost.setVisibility(View.GONE);
+                            btnCreatePost.setVisibility(View.GONE); // Only show for current user, handled in onCreateView now
                         }
                     }
                 });
     }
 
     /**
-     * Fetches and displays the current user's stories from Firestore.
+     * Fetches and displays stories for the `displayUserId`.
      * Updated to use the 'Story' model directly and filter by 24 hours.
      */
     private void listenForUserStories() {
-        if (currentUser == null) return;
+        if (displayUserId == null) {
+            Log.e(TAG, "listenForUserStories: displayUserId is null, cannot fetch stories.");
+            return;
+        }
 
-        // Filter stories that are older than 24 hours.
         long twentyFourHoursAgo = System.currentTimeMillis() - (24 * 60 * 60 * 1000);
         Timestamp cutoffTimestamp = new Timestamp(new Date(twentyFourHoursAgo));
 
         userStoriesListener = storiesCollectionRef
-                .whereEqualTo("userId", currentUser.getUid()) // Filter by current user's ID
-                .whereGreaterThanOrEqualTo("timestamp", cutoffTimestamp) // Only stories from last 24 hours
-                .orderBy("timestamp", Query.Direction.DESCENDING) // Order by latest first
+                .whereEqualTo("userId", displayUserId) // Query for stories of the displayed user
+                .whereGreaterThanOrEqualTo("timestamp", cutoffTimestamp)
+                .orderBy("timestamp", Query.Direction.DESCENDING)
                 .addSnapshotListener((snapshots, e) -> {
                     if (e != null) {
-                        Log.e("ProfileFragment", "Error listening for user stories: " + e.getMessage(), e);
+                        Log.e(TAG, "Error listening for user stories: " + e.getMessage(), e);
                         Toast.makeText(getContext(), "Error loading stories: " + e.getMessage(), Toast.LENGTH_LONG).show();
                         return;
                     }
 
                     if (snapshots != null) {
-                        List<Story> newStories = new ArrayList<>(); // Now List<Story>
+                        List<Story> newStories = new ArrayList<>();
                         for (QueryDocumentSnapshot doc : snapshots) {
                             try {
                                 Story story = doc.toObject(Story.class);
-                                story.setId(doc.getId()); // Set the Firestore document ID from doc.getId()
-                                newStories.add(story);
+                                if (story != null) {
+                                    story.setId(doc.getId());
+                                    newStories.add(story);
+                                }
                             } catch (Exception parseException) {
-                                Log.e("ProfileFragment", "Error parsing story document " + doc.getId() + ": " + parseException.getMessage(), parseException);
+                                Log.e(TAG, "Error parsing story document " + doc.getId() + ": " + parseException.getMessage(), parseException);
                             }
                         }
                         storiesList.clear();
                         storiesList.addAll(newStories);
-                        profileStoriesAdapter.updateStories(storiesList); // Update the adapter
+                        profileStoriesAdapter.updateStories(storiesList);
 
                         if (storiesList.isEmpty()) {
                             rvStories.setVisibility(View.GONE);
                             tvNoStoriesMessage.setVisibility(View.VISIBLE);
-                            btnAddStory.setVisibility(View.VISIBLE);
+                            btnAddStory.setVisibility(View.GONE); // Only show for current user, handled in onCreateView now
                         } else {
                             rvStories.setVisibility(View.VISIBLE);
                             tvNoStoriesMessage.setVisibility(View.GONE);
-                            btnAddStory.setVisibility(View.GONE);
+                            btnAddStory.setVisibility(View.GONE); // Only show for current user, handled in onCreateView now
                         }
                     }
                 });
     }
 
+    /**
+     * Fetches and displays friends for the `displayUserId`.
+     * This assumes a "friends" subcollection or a "friendships" collection
+     * where each document directly references the friend's user ID.
+     */
+    private void listenForFriends() {
+        if (displayUserId == null) {
+            Log.e(TAG, "listenForFriends: displayUserId is null, cannot fetch friends.");
+            return;
+        }
+
+        // Assuming a subcollection 'friends' under each user document
+        // e.g., /users/{userId}/friends/{friendshipDocId}
+        // or a top-level 'friendships' collection
+        // e.g., /friendships/{friendshipDocId} where it contains userId1, userId2, status
+        // For simplicity, let's assume a subcollection like: /users/{displayUserId}/friends
+        // and each document in it contains a 'friendId' field and 'username', 'profilePicUrl'.
+        // You might need to adjust this query based on your actual Firestore structure.
+
+        // Example: Fetching friends from a 'friends' subcollection
+        friendsListener = db.collection("users").document(displayUserId).collection("friends")
+                .addSnapshotListener((snapshots, e) -> {
+                    if (e != null) {
+                        Log.e(TAG, "Error listening for friends: " + e.getMessage(), e);
+                        Toast.makeText(getContext(), "Error loading friends: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                        return;
+                    }
+
+                    if (snapshots != null) {
+                        List<FriendsAdapter.FriendItem> newFriends = new ArrayList<>();
+                        for (QueryDocumentSnapshot doc : snapshots) {
+                            try {
+                                // Assuming your 'friends' subcollection documents contain these fields
+                                String friendId = doc.getId(); // Or doc.getString("friendId") if it's a field
+                                String username = doc.getString("username");
+                                String profilePicUrl = doc.getString("profilePicUrl");
+
+                                if (username != null && profilePicUrl != null) {
+                                    newFriends.add(new FriendsAdapter.FriendItem(friendId, username, profilePicUrl));
+                                }
+                            } catch (Exception parseException) {
+                                Log.e(TAG, "Error parsing friend document " + doc.getId() + ": " + parseException.getMessage(), parseException);
+                            }
+                        }
+                        friendsList.clear();
+                        friendsList.addAll(newFriends);
+                        friendsAdapter.updateFriends(friendsList); // Make sure your FriendsAdapter has this method
+
+                        tvFriendsCount.setText(String.valueOf(friendsList.size()));
+
+                        if (friendsList.isEmpty()) {
+                            rvFriends.setVisibility(View.GONE);
+                            tvNoFriendsMessage.setVisibility(View.VISIBLE);
+                            btnAddFriends.setVisibility(View.GONE); // Only show for current user, handled in onCreateView
+                        } else {
+                            rvFriends.setVisibility(View.VISIBLE);
+                            tvNoFriendsMessage.setVisibility(View.GONE);
+                            btnAddFriends.setVisibility(View.GONE); // Only show for current user, handled in onCreateView
+                        }
+                    }
+                });
+    }
 
     @Override
     public void onMapReady(@NonNull GoogleMap googleMap) {
@@ -411,11 +554,26 @@ public class ProfileFragment extends Fragment implements OnMapReadyCallback {
         gMap.getUiSettings().setZoomControlsEnabled(false);
         gMap.getUiSettings().setMapToolbarEnabled(false);
 
-        // This is where you'd load actual map data if available
-        LatLng userLocation = new LatLng(14.5995, 120.9842); // Example: Manila
-        gMap.addMarker(new MarkerOptions().position(userLocation).title("My Last Walkfie Spot"));
-        gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(userLocation, 12f));
+        // Fetch and display map data for the 'displayUserId'
+        // This is a placeholder; you'd load actual location data associated with 'displayUserId'
+        // from Firestore and then add markers/polylines.
+        // For example, if you have a 'locations' collection with userId and LatLng:
+        // db.collection("locations").whereEqualTo("userId", displayUserId).get()...
+        LatLng defaultLocation = new LatLng(14.5995, 120.9842); // Example: Manila
+        gMap.addMarker(new MarkerOptions().position(defaultLocation).title("User's Last Known Location"));
+        gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(defaultLocation, 12f));
 
+        // If you actually fetch map data and it's not empty:
+        hasMapData = true; // Set this based on actual data
+        if (hasMapData) {
+            miniMapView.setVisibility(View.VISIBLE);
+            tvNoMapDataMessage.setVisibility(View.GONE);
+            btnFullScreenMap.setVisibility(View.VISIBLE);
+        } else {
+            miniMapView.setVisibility(View.GONE);
+            tvNoMapDataMessage.setVisibility(View.VISIBLE);
+            btnFullScreenMap.setVisibility(View.GONE);
+        }
         // Optional: Apply map style (e.g., from R.raw.map_style_black_accents)
     }
 
@@ -423,7 +581,8 @@ public class ProfileFragment extends Fragment implements OnMapReadyCallback {
         rvFriends.setLayoutManager(new LinearLayoutManager(getContext(), LinearLayoutManager.HORIZONTAL, false));
         friendsAdapter = new FriendsAdapter(friendsList, friendItem -> {
             if (callback != null) {
-                callback.openFriendProfile(friendItem);
+                // When clicking a friend's profile from *this* profile, navigate to *their* profile
+                callback.openFriendProfile(friendItem); // Or callback.navigateToProfileFromHome(friendItem.getUserId());
             } else {
                 Toast.makeText(getContext(), "Viewing friend: " + friendItem.getUsername(), Toast.LENGTH_SHORT).show();
             }
@@ -432,10 +591,9 @@ public class ProfileFragment extends Fragment implements OnMapReadyCallback {
     }
 
     private void setupStoriesRecyclerView() {
-        rvStories.setLayoutManager(new GridLayoutManager(getContext(), 3));
+        rvStories.setLayoutManager(new GridLayoutManager(getContext(), 3)); // 3 columns for stories
         profileStoriesAdapter = new ProfileStoriesAdapter(storiesList, (stories, clickedPosition) -> {
             if (callback != null) {
-                // Pass the full list of stories and the index of the clicked one
                 callback.openStoryViewer(stories, clickedPosition);
             } else {
                 Toast.makeText(getContext(), "Viewing story at index: " + clickedPosition, Toast.LENGTH_SHORT).show();
@@ -446,7 +604,7 @@ public class ProfileFragment extends Fragment implements OnMapReadyCallback {
     }
 
     private void setupPostsRecyclerView() {
-        rvPosts.setLayoutManager(new GridLayoutManager(getContext(), 3));
+        rvPosts.setLayoutManager(new GridLayoutManager(getContext(), 3)); // 3 columns for posts
         profilePostsAdapter = new ProfilePostsAdapter(postsList, postItem -> {
             if (callback != null) {
                 callback.openPostDetails(postItem);
@@ -472,7 +630,7 @@ public class ProfileFragment extends Fragment implements OnMapReadyCallback {
     @Override
     public void onDestroyView() {
         super.onDestroyView();
-        callback = null;
+        callback = null; // Clear callback to prevent leaks
         if (miniMapView != null) {
             miniMapView.onDestroy();
         }
@@ -492,8 +650,26 @@ public class ProfileFragment extends Fragment implements OnMapReadyCallback {
             mapViewBundle = new Bundle();
             outState.putBundle("MapViewBundleKey", mapViewBundle);
         }
+        // Only save map state if it's visible. Otherwise, it might cause issues.
         if (miniMapView != null && miniMapView.getVisibility() == View.VISIBLE) {
             miniMapView.onSaveInstanceState(mapViewBundle);
+        }
+        // Save the displayUserId for rotation/recreation
+        outState.putString(ARG_USER_ID, displayUserId);
+    }
+
+    // Restore userId if fragment is recreated
+    @Override
+    public void onViewStateRestored(@Nullable Bundle savedInstanceState) {
+        super.onViewStateRestored(savedInstanceState);
+        if (savedInstanceState != null) {
+            displayUserId = savedInstanceState.getString(ARG_USER_ID);
+            // Re-initialize Firestore references if they were null or pointing to old user
+            if (displayUserId != null && userProfileRef == null) {
+                userProfileRef = db.collection("users").document(displayUserId);
+                postsCollectionRef = db.collection("posts");
+                storiesCollectionRef = db.collection("stories");
+            }
         }
     }
 }

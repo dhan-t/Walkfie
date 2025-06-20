@@ -1,29 +1,42 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
-    android:layout_width="wrap_content"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="80dp"
     android:layout_height="wrap_content"
-    android:orientation="vertical"
-    android:gravity="center_horizontal"
-    android:paddingStart="4dp"
-    android:paddingEnd="4dp"
-    android:paddingTop="8dp"
-    android:paddingBottom="8dp">
+    android:layout_marginStart="4dp"
+    android:layout_marginEnd="4dp"
+    android:clickable="true"
+    android:focusable="true"
+    android:background="?attr/selectableItemBackgroundBorderless">
 
     <de.hdodenhof.circleimageview.CircleImageView
         android:id="@+id/ivStoryProfilePic"
-        android:layout_width="68dp"
-        android:layout_height="68dp"
+        android:layout_width="72dp"
+        android:layout_height="72dp"
         android:src="@drawable/ic_default_profile_placeholder"
-        />
+        android:scaleType="centerCrop"
+        android:background="@drawable/circle_add_story_border"
+        android:padding="3dp"
+        android:contentDescription="User story profile picture"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
 
     <TextView
         android:id="@+id/tvStoryUsername"
-        android:layout_width="wrap_content"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
-        android:text="Friend Name"
+        android:gravity="center_horizontal"
+        android:maxLines="1"
+        android:ellipsize="end"
         android:textColor="@android:color/black"
-        android:textSize="12sp" />
+        android:textSize="12sp"
+        app:layout_constraintTop_toBottomOf="@id/ivStoryProfilePic"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        tools:text="Friend Name" />
 
-</LinearLayout>
+</androidx.constraintlayout.widget.ConstraintLayout>

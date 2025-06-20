@@ -18,18 +18,21 @@ import com.google.android.material.bottomnavigation.BottomNavigationView;
 import com.google.android.material.navigation.NavigationBarView;
 // Ensure this import is correct. If StoryViewerFragment is in a different package, adjust.
 import com.example.walkfie.StoryViewerFragment;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-// MODIFIED: Added StoryViewerFragment.StoryViewerCallback to the implemented interfaces
+// MODIFIED: Added StoryViewerFragment.StoryViewerCallback AND CreatePostFragment.CreatePostCallback
 public class HomeActivity extends AppCompatActivity implements
         RecordFragmentCallback, MapFragmentCallback, ProfileFragmentCallback,
-        MessageFragmentCallback, HomeFragmentCallback, EditProfileCallback,
+        MessageFragmentCallback, HomeFragment.HomeFragmentCallback, EditProfileCallback,
         AddStoryCallback, PhotoFragmentCallback,
-        StoryViewerFragment.StoryViewerCallback { // <--- NEW: Implements StoryViewerCallback
+        StoryViewerFragment.StoryViewerCallback, // Existing
+        CreatePostFragment.CreatePostCallback { // <--- NEW: Implements CreatePostCallback
 
     private static final String TAG = "HomeActivity";
     BottomNavigationView bottomNavigationView;
@@ -43,9 +46,10 @@ public class HomeActivity extends AppCompatActivity implements
     private MessageFragment messageFragment;
     private ProfileFragment profileFragment;
     private EditProfileFragment editProfileFragment;
-    private AddStoryFragment addStoryFragment; // NEW
-    private CreatePostFragment createPostFragment; // NEW
-    private FindFriendsFragment findFriendsFragment; // NEW
+    private AddStoryFragment addStoryFragment;
+    private CreatePostFragment createPostFragment; // Existing
+    private FindFriendsFragment findFriendsFragment;
+    private FirebaseAuth mAuth; // Existing
     // Add references for PostDetailsFragment if you create it, storyViewerFragment instance is created on demand
     // private PostDetailsFragment postDetailsFragment;
 
@@ -72,8 +76,12 @@ public class HomeActivity extends AppCompatActivity implements
             messageFragment = new MessageFragment();
             profileFragment = new ProfileFragment();
             addStoryFragment = new AddStoryFragment();
-            createPostFragment = new CreatePostFragment();
-            findFriendsFragment = new FindFriendsFragment();
+            // createPostFragment and findFriendsFragment are typically initialized when navigated to,
+            // but can be initialized here if they are part of the initial set of retained fragments.
+            // For now, we'll keep them instantiated on demand or reuse if already in map.
+            // createPostFragment = new CreatePostFragment(); // No need to initialize here if newInstance() is always used
+            // findFriendsFragment = new FindFriendsFragment(); // No need to initialize here if newInstance() is always used
+
 
             bottomNavFragmentsMap = new HashMap<>();
             bottomNavFragmentsMap.put(R.id.nav_home, homeFragment);
@@ -81,6 +89,9 @@ public class HomeActivity extends AppCompatActivity implements
             bottomNavFragmentsMap.put(R.id.nav_record, recordFragment);
             bottomNavFragmentsMap.put(R.id.nav_map, mapFragment);
             bottomNavFragmentsMap.put(R.id.nav_message, messageFragment);
+            // ProfileFragment is also a root bottom nav fragment for PROFILE_FRAGMENT_TAG
+//            bottomNavFragmentsMap.put(R.id.nav_profile, profileFragment); // Assuming you have a nav_profile item in your menu
+
 
             loadInitialBottomNavFragments();
             lastSelectedBottomNavFragment = homeFragment;
@@ -102,6 +113,7 @@ public class HomeActivity extends AppCompatActivity implements
             bottomNavFragmentsMap.put(R.id.nav_record, recordFragment);
             bottomNavFragmentsMap.put(R.id.nav_map, mapFragment);
             bottomNavFragmentsMap.put(R.id.nav_message, messageFragment);
+//            bottomNavFragmentsMap.put(R.id.nav_profile, profileFragment); // Assuming nav_profile
 
             for (Fragment fragment : fragmentManager.getFragments()) {
                 if (fragment != null && fragment.isAdded() && !fragment.isHidden()) {
@@ -177,15 +189,11 @@ public class HomeActivity extends AppCompatActivity implements
                 bottomNavigationView.setVisibility(View.VISIBLE);
 
             } else {
-                // Back stack is NOT empty: a pushed fragment (e.g., StoryViewer, EditProfile) is on top
+                // Back stack is NOT empty: a pushed fragment (e.g., StoryViewer, EditProfile, CreatePost) is on top
                 Log.d(TAG, "Back stack is not empty. A pushed fragment is on top. Hiding bottom nav.");
 
                 // Hide the bottom navigation bar when a non-bottom-nav fragment is on top
                 bottomNavigationView.setVisibility(View.GONE);
-
-                // IMPORTANT: DO NOT PROGRAMMATICALLY SET SELECTED ITEM HERE.
-                // This was the root cause of the immediate popBackStack(null, POP_BACK_STACK_INCLUSIVE).
-                // bottomNavigationView.setSelectedItemId(0); // This line is intentionally REMOVED
             }
         });
     }
@@ -308,17 +316,15 @@ public class HomeActivity extends AppCompatActivity implements
         // Your existing code for onRecordingStopped
     }
 
-// --- End of Part 1 ---
-
-// --- Start of Part 2 ---
-
-    @Override // Implementing the method from MapFragmentCallback
+    @Override
     public void navigateToProfile() {
-        Log.d(TAG, "navigateToProfile called. currentFragment: " + (currentFragment != null ? currentFragment.getClass().getSimpleName() : "null"));
-        // Check if ProfileFragment is already the current top fragment to avoid re-adding
-        if (currentFragment == profileFragment && profileFragment.isAdded() && !profileFragment.isHidden()) {
-            Log.d(TAG, "Already on ProfileFragment and visible. Skipping navigation.");
-            return;
+        FirebaseUser currentUser = mAuth.getCurrentUser();
+        if (currentUser != null) {
+            // Call the new, more general method with the current user's ID
+            navigateToProfileFromHome(currentUser.getUid());
+        } else {
+            Toast.makeText(this, "User not logged in to view profile.", Toast.LENGTH_SHORT).show();
+            Log.w(TAG, "Attempted to navigate to profile, but user is not logged in.");
         }
 
         FragmentTransaction transaction = fragmentManager.beginTransaction();
@@ -347,9 +353,6 @@ public class HomeActivity extends AppCompatActivity implements
         transaction.commit();
         currentFragment = profileFragment; // Update current fragment
         Log.d(TAG, "Navigation to ProfileFragment committed. New currentFragment: " + currentFragment.getClass().getSimpleName());
-
-        // REMOVED: bottomNavigationView.setSelectedItemId(0);
-        // The onBackStackChangedListener now handles bottom nav visibility.
     }
 
     @Override
@@ -386,24 +389,11 @@ public class HomeActivity extends AppCompatActivity implements
         transaction.commit();
         currentFragment = editProfileFragment; // Update current fragment
         Log.d(TAG, "Navigation to EditProfileFragment committed. New currentFragment: " + currentFragment.getClass().getSimpleName());
-
-        // REMOVED: bottomNavigationView.setSelectedItemId(0);
-        // The onBackStackChangedListener now handles bottom nav visibility.
     }
 
     @Override
     public void navigateToSettings() {
         Toast.makeText(this, "Navigate to Settings Screen (Not implemented)", Toast.LENGTH_SHORT).show();
-        // Example implementation for a new fragment:
-        // SettingsFragment settingsFragment = new SettingsFragment();
-        // FragmentTransaction transaction = fragmentManager.beginTransaction();
-        // transaction.setCustomAnimations(android.R.anim.fade_in, android.R.anim.fade_out, android.R.anim.fade_in, android.R.anim.fade_out);
-        // if (currentFragment != null) transaction.hide(currentFragment);
-        // transaction.add(R.id.fragment_container, settingsFragment, "SETTINGS_FRAGMENT_TAG");
-        // transaction.addToBackStack("settings_fragment");
-        // transaction.commit();
-        // currentFragment = settingsFragment;
-        // REMOVED: bottomNavigationView.setSelectedItemId(0);
     }
 
     @Override
@@ -431,7 +421,7 @@ public class HomeActivity extends AppCompatActivity implements
     }
 
     @Override
-    public void openPostDetails(PostAdapter.PostItem post) {
+    public void openPostDetails(Post post) { // Changed PostAdapter.PostItem to Post
         Toast.makeText(this, "Opening Post Details for: " + post.getId(), Toast.LENGTH_SHORT).show();
         // Implement actual navigation to a PostDetailsFragment
         // Example:
@@ -443,7 +433,6 @@ public class HomeActivity extends AppCompatActivity implements
         // transaction.addToBackStack("post_details");
         // transaction.commit();
         // currentFragment = postDetailsFragment;
-        // REMOVED: bottomNavigationView.setSelectedItemId(0);
     }
 
     // MODIFIED: openStoryViewer to correctly add fragment and not interfere with bottom nav
@@ -459,11 +448,6 @@ public class HomeActivity extends AppCompatActivity implements
                 new ArrayList<>(storiesToView),
                 startIndex
         );
-
-        // OPTIONAL: If StoryViewerFragment needs to notify the activity when closed, set a callback.
-        // It's good practice to set it here right after newInstance.
-        // The StoryViewerFragment.onAttach will handle setting its internal callback reference if this is uncommented.
-        // storyViewerFragment.setCallback(this); // You would need a setCallback method in StoryViewerFragment
 
         FragmentTransaction transaction = fragmentManager.beginTransaction();
         transaction.setCustomAnimations(android.R.anim.fade_in, android.R.anim.fade_out, android.R.anim.fade_in, android.R.anim.fade_out);
@@ -481,27 +465,11 @@ public class HomeActivity extends AppCompatActivity implements
         Log.d(TAG, "DEBUG_FLOW: StoryViewerFragment transaction committed. Back stack entry count after commit: " + fragmentManager.getBackStackEntryCount()); // Modified log
 
         currentFragment = storyViewerFragment; // Update current fragment reference
-
-        // IMPORTANT: DO NOT PROGRAMMATICALLY SET bottomNavigationView.setSelectedItemId(0) HERE!
-        // The onBackStackChangedListener now handles bottom nav visibility.
     }
 
     @Override
     public void openFriendProfile(FriendsAdapter.FriendItem friend) {
         Toast.makeText(this, "Opening Friend Profile for: " + friend.getUsername(), Toast.LENGTH_SHORT).show();
-        // Implement actual navigation to another ProfileFragment showing the friend's profile
-        // This would involve creating a new instance of ProfileFragment (or a similar fragment)
-        // and passing the friend's UID as an argument.
-        // If you want to reuse ProfileFragment, you'd need a factory method like ProfileFragment.newInstance(userId)
-        // ProfileFragment friendProfileFragment = ProfileFragment.newInstance(friend.getUserId());
-        // FragmentTransaction transaction = fragmentManager.beginTransaction();
-        // transaction.setCustomAnimations(android.R.anim.fade_in, android.R.anim.fade_out, android.R.anim.fade_in, android.R.anim.fade_out);
-        // if (currentFragment != null) transaction.hide(currentFragment);
-        // transaction.add(R.id.fragment_container, friendProfileFragment, "FRIEND_PROFILE_FRAGMENT_TAG");
-        // transaction.addToBackStack("friend_profile");
-        // transaction.commit();
-        // currentFragment = friendProfileFragment;
-        // REMOVED: bottomNavigationView.setSelectedItemId(0);
     }
 
     @Override
@@ -530,21 +498,38 @@ public class HomeActivity extends AppCompatActivity implements
     @Override
     public void navigateToChatScreen(String chatPartnerName) {
         Toast.makeText(this, "Opening chat with: " + chatPartnerName, Toast.LENGTH_SHORT).show();
-        // Example:
-        // ChatConversationFragment chatConversationFragment = ChatConversationFragment.newInstance(chatPartnerName);
-        // FragmentTransaction transaction = fragmentManager.beginTransaction();
-        // transaction.setCustomAnimations(android.R.anim.fade_in, android.R.anim.fade_out, android.R.anim.fade_in, android.R.anim.fade_out);
-        // if (currentFragment != null) transaction.hide(currentFragment);
-        // transaction.add(R.id.fragment_container, chatConversationFragment, "CHAT_CONVERSATION_FRAGMENT_TAG");
-        // transaction.addToBackStack("chat_conversation");
-        // transaction.commit();
-        // currentFragment = chatConversationFragment;
-        // REMOVED: bottomNavigationView.setSelectedItemId(0);
     }
 
     @Override
-    public void navigateToProfileFromHome() {
-        navigateToProfile(); // Reuse the existing navigateToProfile method for consistency
+    public void navigateToProfileFromHome(String userId) {
+        Log.d(TAG, "navigateToProfileFromHome called from HomeFragment with userId: " + userId);
+
+        ProfileFragment targetProfileFragment = ProfileFragment.newInstance(userId); // Use the new factory method!
+
+        // IMPORTANT: Ensure your ProfileFragmentCallback is set if ProfileFragment
+        // needs to communicate back to HomeActivity.
+        // targetProfileFragment.setProfileFragmentCallback(this); // You would need to implement ProfileFragment.Callback
+
+        FragmentTransaction transaction = fragmentManager.beginTransaction();
+        transaction.setCustomAnimations(android.R.anim.fade_in, android.R.anim.fade_out,
+                android.R.anim.fade_in, android.R.anim.fade_out);
+
+        if (currentFragment != null) {
+            transaction.hide(currentFragment);
+            Log.d(TAG, "Hiding " + currentFragment.getClass().getSimpleName() + " for ProfileFragment push (userId: " + userId + ").");
+        }
+
+        // Always add a new instance when using newInstance for different users,
+        // unless you have a very specific caching strategy (which is more complex).
+        transaction.add(R.id.fragment_container, targetProfileFragment, "PROFILE_FRAGMENT_TAG_" + userId);
+        Log.d(TAG, "Adding ProfileFragment for userId: " + userId + ".");
+
+        transaction.addToBackStack("profile_" + userId); // Use unique tag for back stack
+        Log.d(TAG, "ProfileFragment for userId: " + userId + " added to back stack.");
+
+        transaction.commit();
+        currentFragment = targetProfileFragment; // Update current fragment
+        Log.d(TAG, "Navigation to ProfileFragment committed. New currentFragment: " + currentFragment.getClass().getSimpleName());
     }
 
     @Override
@@ -571,17 +556,19 @@ public class HomeActivity extends AppCompatActivity implements
         transaction.commit();
         currentFragment = findFriendsFragment; // Update current fragment
         Log.d(TAG, "Navigation to FindFriendsFragment committed. New currentFragment: " + currentFragment.getClass().getSimpleName());
-
-        // REMOVED: bottomNavigationView.setSelectedItemId(0);
-        // The onBackStackChangedListener now handles bottom nav visibility.
     }
 
+    // MODIFIED: navigateToPostCreationFromHome - Set callback
     @Override
     public void navigateToPostCreationFromHome() {
         Log.d(TAG, "navigateToPostCreationFromHome called.");
-        if (createPostFragment == null) {
-            createPostFragment = new CreatePostFragment();
-        }
+        // Always create a new instance of CreatePostFragment when navigating to it
+        // because it receives arguments (mediaUri, mediaType) and holds transient UI state.
+        // It's not a root bottom nav fragment to be retained like others.
+        // We ensure it gets the callback set here.
+        createPostFragment = new CreatePostFragment(); // Re-instantiate if needed, or if it's new
+        createPostFragment.setCreatePostCallback(this); // <--- NEW: Set the callback here
+
         FragmentTransaction transaction = fragmentManager.beginTransaction();
         transaction.setCustomAnimations(android.R.anim.fade_in, android.R.anim.fade_out,
                 android.R.anim.fade_in, android.R.anim.fade_out);
@@ -589,20 +576,14 @@ public class HomeActivity extends AppCompatActivity implements
             transaction.hide(currentFragment); // Hide the current fragment (HomeFragment)
             Log.d(TAG, "Hiding " + currentFragment.getClass().getSimpleName() + " for CreatePostFragment push.");
         }
-        if (!createPostFragment.isAdded()) {
-            transaction.add(R.id.fragment_container, createPostFragment, "CREATE_POST_FRAGMENT_TAG");
-            Log.d(TAG, "Adding CreatePostFragment.");
-        } else {
-            transaction.show(createPostFragment);
-            Log.d(TAG, "Showing existing CreatePostFragment.");
-        }
+        // No need for .isAdded() check for createPostFragment as we are creating a new instance
+        transaction.add(R.id.fragment_container, createPostFragment, "CREATE_POST_FRAGMENT_TAG");
+        Log.d(TAG, "Adding CreatePostFragment.");
+
         transaction.addToBackStack("create_post"); // Add to back stack
         transaction.commit();
         currentFragment = createPostFragment; // Update current fragment
         Log.d(TAG, "Navigation to CreatePostFragment committed. New currentFragment: " + currentFragment.getClass().getSimpleName());
-
-        // REMOVED: bottomNavigationView.setSelectedItemId(0);
-        // The onBackStackChangedListener now handles bottom nav visibility.
     }
 
     @Override
@@ -639,7 +620,6 @@ public class HomeActivity extends AppCompatActivity implements
     public void onMediaCapturedForStory(Uri mediaUri, String mediaType) {
         Log.d(TAG, "onMediaCapturedForStory received in HomeActivity. URI: " + mediaUri + " Type: " + mediaType);
 
-        // Navigate to AddStoryFragment with the actual media URI and media type
         AddStoryFragment addStoryFragmentInstance = AddStoryFragment.newInstance(mediaUri, mediaType);
         addStoryFragmentInstance.setAddStoryCallback(this); // Ensure callback is set
 
@@ -659,18 +639,16 @@ public class HomeActivity extends AppCompatActivity implements
 
         currentFragment = addStoryFragmentInstance; // Update current fragment
         Log.d(TAG, "Navigation to AddStoryFragment from PhotoFragment success. New currentFragment: " + currentFragment.getClass().getSimpleName());
-
-        // REMOVED: bottomNavigationView.setSelectedItemId(0);
-        // The onBackStackChangedListener now handles bottom nav visibility.
     }
+
     @Override
     public void onMediaCapturedForPost(Uri mediaUri, String mediaType) {
         Log.d(TAG, "onMediaCapturedForPost received in HomeActivity. URI: " + mediaUri + " Type: " + mediaType);
-        Toast.makeText(this, "Media captured for Post (Not implemented yet): " + mediaUri.getLastPathSegment(), Toast.LENGTH_LONG).show();
+        Toast.makeText(this, "Media captured for Post, navigating to creation screen.", Toast.LENGTH_LONG).show();
 
-        // Implement navigation to CreatePostFragment here, similar to AddStoryFragment
+        // Create new instance of CreatePostFragment with media URI and type
         CreatePostFragment createPostFragmentInstance = CreatePostFragment.newInstance(mediaUri, mediaType);
-        // createPostFragmentInstance.setCreatePostCallback(this); // Set its callback if you have one
+        createPostFragmentInstance.setCreatePostCallback(this); // <--- NEW: Set the callback here
 
         FragmentTransaction transaction = fragmentManager.beginTransaction();
         transaction.setCustomAnimations(android.R.anim.fade_in, android.R.anim.fade_out,
@@ -687,17 +665,13 @@ public class HomeActivity extends AppCompatActivity implements
         transaction.commit();
 
         currentFragment = createPostFragmentInstance;
-        // REMOVED: bottomNavigationView.setSelectedItemId(0);
-        // The onBackStackChangedListener now handles bottom nav visibility.
+        Log.d(TAG, "Navigation to CreatePostFragment from PhotoFragment success. New currentFragment: " + currentFragment.getClass().getSimpleName());
     }
 
     @Override
     public void onPhotoFragmentCancelled() {
         Log.d(TAG, "Photo capture/selection cancelled. Popping back to previous fragment if applicable.");
         Toast.makeText(this, "Media selection cancelled.", Toast.LENGTH_SHORT).show();
-
-        // This implies navigating back, so a simple popBackStack should suffice
-        // The onBackStackChangedListener will then handle showing the correct bottom nav fragment.
         getSupportFragmentManager().popBackStack(); // Pop the PhotoFragment if it was pushed
     }
 
@@ -705,59 +679,40 @@ public class HomeActivity extends AppCompatActivity implements
     private void navigateToHomeFragment(boolean shouldRefreshStories) {
         Log.d(TAG, "navigateToHomeFragment called. Should refresh stories: " + shouldRefreshStories);
 
-        // This method is now primarily for ensuring HomeFragment is visible and potentially refreshing it.
-        // It should clear the back stack only if there are non-bottom-nav fragments on top.
-
-        // Clear the back stack ONLY IF the current fragment is NOT a bottom nav fragment
-        // OR if the target is specifically Home and there's something else on top.
         if (fragmentManager.getBackStackEntryCount() > 0 &&
                 !bottomNavFragmentsMap.containsValue(currentFragment)) {
-            // If a non-bottom nav fragment is on top, pop everything until a bottom nav fragment is revealed
             fragmentManager.popBackStack(null, FragmentManager.POP_BACK_STACK_INCLUSIVE);
             Log.d(TAG, "Cleared back stack to return to a bottom nav state.");
-            // The onBackStackChangedListener will handle displaying the correct bottom nav fragment
-            // (likely HomeFragment if it was the last selected or is the default)
-            // and showing the bottom nav bar.
         } else if (fragmentManager.getBackStackEntryCount() > 0 && currentFragment != homeFragment) {
-            // If a different bottom nav fragment is on top, ensure HomeFragment is visible
             showBottomNavFragment(homeFragment);
         }
 
-
-        // Ensure homeFragment instance is valid and callback is set
         if (homeFragment == null) {
             homeFragment = new HomeFragment();
-            homeFragment.setHomeFragmentCallback(this); // Ensure callback is set for new instance
+            homeFragment.setHomeFragmentCallback(this);
         }
 
         if (shouldRefreshStories) {
             homeFragment.refreshStories(); // Make sure this method exists and works
         }
 
-        // If HomeFragment is already current and visible, no need for transaction
         if (currentFragment == homeFragment && homeFragment.isAdded() && !homeFragment.isHidden()) {
             Log.d(TAG, "HomeFragment is already current and visible. Skipping transaction.");
         } else {
-            // Ensure HomeFragment is the visible one via show/hide (or add if not added)
             showBottomNavFragment(homeFragment);
         }
 
-        // Programmatically select the home tab to update UI, but prevent listener's back stack clear
         isProgrammaticBottomNavSelection = true;
         bottomNavigationView.setSelectedItemId(R.id.nav_home);
         isProgrammaticBottomNavSelection = false;
 
-        currentFragment = homeFragment; // Explicitly set currentFragment after this operation
+        currentFragment = homeFragment;
     }
-
 
     @Override
     public void onStoryCreationCancelled() {
         Log.d(TAG, "Story creation cancelled. Navigating back to previous state.");
         Toast.makeText(this, "Story creation cancelled.", Toast.LENGTH_SHORT).show();
-
-        // A simple popBackStack should handle navigating from AddStoryFragment back to PhotoFragment
-        // or whatever was before it. The onBackStackChangedListener will then react.
         getSupportFragmentManager().popBackStack();
     }
 
@@ -766,13 +721,7 @@ public class HomeActivity extends AppCompatActivity implements
     public void onStoryPostedSuccessfully() {
         Log.d(TAG, "Story posted successfully. Navigating back.");
         Toast.makeText(this, "Story posted!", Toast.LENGTH_SHORT).show();
-
-        // Pop the AddStoryFragment off the back stack
-        getSupportFragmentManager().popBackStack(); // This will trigger onBackStackChangedListener
-
-        // The onBackStackChangedListener should now handle returning to the previous fragment
-        // (which should be the HomeFragment or PhotoFragment depending on the flow)
-        // and showing the bottom nav if the stack is now empty.
+        getSupportFragmentManager().popBackStack(); // Pop the AddStoryFragment off the back stack
 
         // Ensure HomeFragment refreshes its stories when it becomes visible again.
         if (homeFragment != null) {
@@ -781,7 +730,6 @@ public class HomeActivity extends AppCompatActivity implements
             Log.e(TAG, "HomeFragment is null in onStoryPostedSuccessfully!");
         }
     }
-
 
     @Override
     protected void onSaveInstanceState(Bundle outState) {
@@ -801,28 +749,47 @@ public class HomeActivity extends AppCompatActivity implements
     public void onStoryViewerClosed() {
         Log.d(TAG, "DEBUG_FLOW: onStoryViewerClosed called by StoryViewerFragment.");
 
-        // This method is called when the StoryViewerFragment wants to close itself.
-        // We simply pop it from the back stack.
         FragmentManager fragmentManager = getSupportFragmentManager();
         if (fragmentManager.getBackStackEntryCount() > 0) {
-            fragmentManager.popBackStack(); // Pop the StoryViewerFragment
+            fragmentManager.popBackStack();
             Log.d(TAG, "DEBUG_FLOW: StoryViewerFragment popped from back stack.");
         } else {
             Log.w(TAG, "DEBUG_FLOW: Back stack is empty, cannot pop StoryViewerFragment. This shouldn't happen if it was added with addToBackStack.");
-            // Fallback if somehow it wasn't added to the back stack (e.g., initial state)
-            // If the HomeFragment was hidden, make sure to show it again
-            Fragment homeFragmentInstance = fragmentManager.findFragmentByTag("HOME_FRAGMENT"); // Assuming "HOME_FRAGMENT" is its tag
+            Fragment homeFragmentInstance = fragmentManager.findFragmentByTag("HOME_FRAGMENT");
             if (homeFragmentInstance != null && homeFragmentInstance.isHidden()) {
                 fragmentManager.beginTransaction().show(homeFragmentInstance).commit();
                 Log.d(TAG, "DEBUG_FLOW: HomeFragment explicitly shown as fallback.");
             } else if (!(homeFragmentInstance instanceof HomeFragment)) {
-                // If there's no HomeFragment or it's a different one, replace it (less ideal for back stack flow)
-                // This scenario means something unexpected happened, typically you'd want to return to a known state.
                 fragmentManager.beginTransaction().replace(R.id.fragment_container, new HomeFragment()).commit();
                 Log.d(TAG, "DEBUG_FLOW: Replacing with new HomeFragment as fallback.");
             }
         }
-        // The onBackStackChangedListener will handle showing the bottom nav bar again
-        // and setting the currentFragment once the stack changes.
+    }
+
+    // --- NEW: CreatePostFragment.CreatePostCallback implementation ---
+    @Override
+    public void onPostCreatedSuccessfully() {
+        Log.d(TAG, "onPostCreatedSuccessfully called by CreatePostFragment.");
+        Toast.makeText(this, "Post created successfully!", Toast.LENGTH_SHORT).show();
+
+        // Pop the CreatePostFragment off the back stack
+        getSupportFragmentManager().popBackStack();
+
+        // Optionally, refresh the posts in HomeFragment
+        if (homeFragment != null) {
+            homeFragment.refreshPosts(); // <--- NEW: Assuming HomeFragment has a refreshPosts() method
+            Log.d(TAG, "HomeFragment refreshPosts() called.");
+        } else {
+            Log.e(TAG, "HomeFragment is null in onPostCreatedSuccessfully!");
+        }
+    }
+
+    @Override
+    public void onPostCreationCancelled() {
+        Log.d(TAG, "onPostCreationCancelled called by CreatePostFragment.");
+        Toast.makeText(this, "Post creation cancelled.", Toast.LENGTH_SHORT).show();
+
+        // Pop the CreatePostFragment off the back stack
+        getSupportFragmentManager().popBackStack();
     }
 }

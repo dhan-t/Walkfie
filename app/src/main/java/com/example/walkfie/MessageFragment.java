@@ -8,6 +8,7 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -19,6 +20,9 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import java.util.ArrayList;
 import java.util.List;
+
+import android.os.Handler; // Import Handler
+import android.os.Looper; // Import Looper
 
 // Define a callback interface for MessageFragment actions
 interface MessageFragmentCallback {
@@ -34,11 +38,15 @@ public class MessageFragment extends Fragment {
     private RecyclerView rvChatList;
     private LinearLayout noChatsLayout;
     private Button btnFindFriends;
+    private ProgressBar messagesProgressBar; // Declare the ProgressBar
 
     private ChatListAdapter chatListAdapter;
     private List<ChatListAdapter.ChatItem> dummyChatData; // For demonstrating chat list or empty state
 
     private MessageFragmentCallback callback;
+
+    // Handler for delayed UI updates (for demonstration purposes)
+    private final Handler handler = new Handler(Looper.getMainLooper());
 
     public void setMessageFragmentCallback(MessageFragmentCallback callback) {
         this.callback = callback;
@@ -69,33 +77,48 @@ public class MessageFragment extends Fragment {
         rvChatList = view.findViewById(R.id.rvChatList);
         noChatsLayout = view.findViewById(R.id.noChatsLayout);
         btnFindFriends = view.findViewById(R.id.btnFindFriends);
+        messagesProgressBar = view.findViewById(R.id.messagesProgressBar); // Initialize the ProgressBar
 
-        // --- Dummy Data Setup ---
-        // In a real app, you'd load this from a database or API
-        dummyChatData = new ArrayList<>();
-        // Uncomment the line below to test with chat data
-         populateDummyChatData();
+        // --- Spinner Logic: Show spinner immediately ---
+        messagesProgressBar.setVisibility(View.VISIBLE);
+        rvChatList.setVisibility(View.GONE);
+        noChatsLayout.setVisibility(View.GONE);
 
-        // Configure RecyclerView
-        rvChatList.setLayoutManager(new LinearLayoutManager(getContext()));
-        chatListAdapter = new ChatListAdapter(dummyChatData, chatItem -> {
-            // Handle chat item click - navigate to actual chat screen
-            if (callback != null) {
-                callback.navigateToChatScreen(chatItem.partnerName);
+        // --- Simulate Data Loading with a Delay ---
+        handler.postDelayed(() -> {
+            // This block runs after the specified delay
+
+            // --- Dummy Data Setup ---
+            // In a real app, you'd load this from a database or API
+            dummyChatData = new ArrayList<>();
+            // Uncomment the line below to test with chat data
+            populateDummyChatData(); // This method fills dummyChatData
+
+            // Configure RecyclerView
+            rvChatList.setLayoutManager(new LinearLayoutManager(getContext()));
+            chatListAdapter = new ChatListAdapter(dummyChatData, chatItem -> {
+                // Handle chat item click - navigate to actual chat screen
+                if (callback != null) {
+                    callback.navigateToChatScreen(chatItem.partnerName);
+                } else {
+                    Toast.makeText(getContext(), "Opening chat with " + chatItem.partnerName, Toast.LENGTH_SHORT).show();
+                }
+            });
+            rvChatList.setAdapter(chatListAdapter);
+
+            // --- Conditional UI Visibility AFTER loading ---
+            messagesProgressBar.setVisibility(View.GONE); // Hide spinner
+
+            if (dummyChatData.isEmpty()) {
+                rvChatList.setVisibility(View.GONE);
+                noChatsLayout.setVisibility(View.VISIBLE);
             } else {
-                Toast.makeText(getContext(), "Opening chat with " + chatItem.partnerName, Toast.LENGTH_SHORT).show();
+                rvChatList.setVisibility(View.VISIBLE);
+                noChatsLayout.setVisibility(View.GONE);
             }
-        });
-        rvChatList.setAdapter(chatListAdapter);
 
-        // --- Conditional UI Visibility ---
-        if (dummyChatData.isEmpty()) {
-            rvChatList.setVisibility(View.GONE);
-            noChatsLayout.setVisibility(View.VISIBLE);
-        } else {
-            rvChatList.setVisibility(View.VISIBLE);
-            noChatsLayout.setVisibility(View.GONE);
-        }
+        }, 2500); // 2000 milliseconds = 2 seconds delay. Adjust as needed.
+
 
         // --- Set Click Listeners ---
         ivProfileIcon.setOnClickListener(v -> {
@@ -131,5 +154,20 @@ public class MessageFragment extends Fragment {
         dummyChatData.add(new ChatListAdapter.ChatItem("Charlie Brown", "Did you get my last message?", "Yesterday", 3));
         dummyChatData.add(new ChatListAdapter.ChatItem("Diana Prince", "Let's plan that walk soon!", "Last Week", 0));
         dummyChatData.add(new ChatListAdapter.ChatItem("Eve Adams", "I'm here! Where are you?", "3 days ago", 5));
+    }
+
+    @Override
+    public void onStop() {
+        super.onStop();
+        // Crucial: Remove any pending callbacks when the fragment stops
+        handler.removeCallbacksAndMessages(null);
+    }
+
+    @Override
+    public void onDetach() {
+        super.onDetach();
+        // Crucial: Remove any pending callbacks when the fragment is detached
+        handler.removeCallbacksAndMessages(null);
+        callback = null;
     }
 }

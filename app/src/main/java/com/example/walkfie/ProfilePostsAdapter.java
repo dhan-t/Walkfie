@@ -4,7 +4,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
-import android.widget.Toast;
+import android.widget.Toast; // Keep Toast import for debugging if needed
 
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
@@ -15,15 +15,16 @@ import java.util.List;
 
 public class ProfilePostsAdapter extends RecyclerView.Adapter<ProfilePostsAdapter.PostThumbnailViewHolder> {
 
-    // Reusing PostAdapter.PostItem from HomeFragment for consistency
-    private List<PostAdapter.PostItem> postThumbnails;
+    // FIX: Change from PostAdapter.PostItem to Post
+    private List<Post> postThumbnails; // Now correctly holds List<Post>
     private OnPostThumbnailClickListener listener;
 
     public interface OnPostThumbnailClickListener {
-        void onPostThumbnailClick(PostAdapter.PostItem postItem);
+        void onPostThumbnailClick(Post post); // <-- FIX: Callback now passes Post object
     }
 
-    public ProfilePostsAdapter(List<PostAdapter.PostItem> postThumbnails, OnPostThumbnailClickListener listener) {
+    // FIX: Constructor now accepts List<Post>
+    public ProfilePostsAdapter(List<Post> postThumbnails, OnPostThumbnailClickListener listener) {
         this.postThumbnails = postThumbnails;
         this.listener = listener;
     }
@@ -38,22 +39,24 @@ public class ProfilePostsAdapter extends RecyclerView.Adapter<ProfilePostsAdapte
 
     @Override
     public void onBindViewHolder(@NonNull PostThumbnailViewHolder holder, int position) {
-        PostAdapter.PostItem post = postThumbnails.get(position);
+        Post post = postThumbnails.get(position); // <-- FIX: Get a Post object
 
-        if (post.getImageUrl() != null && !post.getImageUrl().isEmpty()) {
+        // FIX: Use post.getMediaUrl() as per our Post model
+        // Assuming mediaUrl holds the URL for the main media (image/video thumbnail)
+        if (post.getMediaUrl() != null && !post.getMediaUrl().isEmpty()) {
             Glide.with(holder.itemView.getContext())
-                    .load(post.getImageUrl())
+                    .load(post.getMediaUrl())
                     .placeholder(R.drawable.sample_story_placeholder) // Placeholder for post content
-                    .error(R.drawable.sample_story_placeholder)
+                    .error(R.drawable.ic_close) // Use a proper error image
                     .centerCrop()
                     .into(holder.ivPostThumbnail);
         } else {
-            holder.ivPostThumbnail.setImageResource(R.drawable.sample_story_placeholder);
+            holder.ivPostThumbnail.setImageResource(R.drawable.sample_story_placeholder); // Default if no mediaUrl
         }
 
         holder.itemView.setOnClickListener(v -> {
             if (listener != null) {
-                listener.onPostThumbnailClick(post);
+                listener.onPostThumbnailClick(post); // <-- FIX: Pass the Post object
             }
         });
     }
@@ -63,7 +66,8 @@ public class ProfilePostsAdapter extends RecyclerView.Adapter<ProfilePostsAdapte
         return postThumbnails.size();
     }
 
-    public void updatePosts(List<PostAdapter.PostItem> newPostThumbnails) {
+    // FIX: Method now accepts List<Post>
+    public void updatePosts(List<Post> newPostThumbnails) {
         this.postThumbnails.clear();
         this.postThumbnails.addAll(newPostThumbnails);
         notifyDataSetChanged();
